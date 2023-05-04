@@ -57,7 +57,9 @@ end
 disabled_flags = [
   "legacy_das_deprecation",
   "cavc_dashboard_workflow",
-  "poa_auto_refresh"
+  "poa_auto_refresh",
+  "acd_disable_legacy_distributions",
+  "acd_disable_nonpriority_distributions"
 ]
 
 all_features = AllFeatureToggles.new.call.flatten.uniq
