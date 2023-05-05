@@ -13,6 +13,7 @@ files = Dir[Rails.root.join("vacols_distributions/*.txt")]
 
 # Get each row and transform into hash
 records = []
+puts "### Loading records from #{files.count} files"
 files.each do |file|
   # these come out as text files delimited by 2-4 spaces (varying) between columns
   CSV.foreach(file.to_s, headers: true, col_sep: "  ") do |row|
@@ -32,12 +33,15 @@ records = records.group_by { |record| record["Charge to"] }
 
 # these are the judge's STAFF.SLOGID value
 judges = records.keys
+puts "### Loaded #{records.values.flatten.count} records for #{records.keys.count} judges"
 
 # For each judge create a distribution and distributed cases
 judges.each do |judge_slogid|
   # find judge and create distribution object
   judge = VACOLS::Staff.find_by(slogid: judge_slogid)
-  dist = Distribution.create!(user: judge, push_priority: true)
+  dist = Distribution.create!(judge: User.find_by_css_id(judge.sdomainid), priority_push: true)
+
+  puts "### Creating distribution for #{judge_slogid}"
 
   # this is in this scope for checking case count later
   dist_cases = []
@@ -50,14 +54,16 @@ judges.each do |judge_slogid|
     # skip if a distributed case already exists
     next if DistributedCase.find_by(case_id: legacy_appeal.vacols_id)
 
+    puts "### Creating DistributedCase for VACOLS case #{legacy_appeal.vacols_id}"
+
     # get relevant PRIORLOC records
     location_hist = legacy_appeal.location_history.order(:locdin)
 
     # when being assigned to judge, the judge is both the user and organization in a PRIORLOC record
-    judge_assignment_entry = location_hist.filter { |l| l.locstto == judge_slogid && l.locstrcv == judge_slogid }
+    judge_assignment_entry = location_hist.filter { |l| l.locstto == judge_slogid && l.locstrcv == judge_slogid }.first
 
     # the distribution entry is the one where it's check-in time matches the judge assignment entry's check-out time
-    distribution_entry = location_hist.filter { |l| l.locdin == judge_assignment_entry.locdout }
+    distribution_entry = location_hist.filter { |l| l.locdin == judge_assignment_entry.locdout }.first
 
     # location codes 81 and 83 are how we check if a case is ready for distribution
     ready_at =
@@ -65,6 +71,7 @@ judges.each do |judge_slogid|
         distribution_entry.locdout
       else
         # failsafe in case something goes wrong with getting location histories
+        puts "### Unable to determine ready_at value for case #{legacy_appeal.vacols_id}"
         record["Date Charged"]
       end
 
@@ -107,10 +114,14 @@ judges.each do |judge_slogid|
       dist_case.save!
     end
 
+    puts "### #{dist_cases.count} DistributedCases added to Distribution #{dist.id} for user #{judge}"
     # update distribution status and completed at and add statistics
-    update!(status: "completed", completed_at: Time.zone.now, statistics: stats)
+    dist.update!(status: "completed", completed_at: Time.zone.now, statistics: stats)
   else
+    puts "### No DistributedCases created for #{judge}, destroying the Distribution"
     # no distributed cases were created for this judge so delete the distribution
     dist.destroy!
   end
 end
+
+puts "### Manual creation of Distributions complete"
