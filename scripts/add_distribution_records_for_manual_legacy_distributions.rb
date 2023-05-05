@@ -39,7 +39,13 @@ puts "### Loaded #{records.values.flatten.count} records for #{records.keys.coun
 judges.each do |judge_slogid|
   # find judge and create distribution object
   judge = VACOLS::Staff.find_by(slogid: judge_slogid)
-  dist = Distribution.create!(judge: User.find_by_css_id(judge.sdomainid), priority_push: true)
+
+  begin
+    dist = Distribution.create!(judge: User.find_by_css_id(judge.sdomainid), priority_push: true)
+  rescue ActiveRecord::RecordInvalid
+    puts "### A pending Distribution exists for user #{judge_slogid}, skipping"
+    next
+  end
 
   puts "### Creating distribution for #{judge_slogid}"
 
