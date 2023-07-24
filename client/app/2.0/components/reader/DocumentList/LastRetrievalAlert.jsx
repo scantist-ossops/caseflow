@@ -24,7 +24,7 @@ export const LastRetrievalAlert = ({ appeal, manifestVbmsFetchedAt }) => {
             a loading error from VBMS. As a result, you may be viewing a partial list of claims folder documents.
             <br />
             <br />
-            Please refresh your browser at a later point to view a complete list of documents in the claims
+            Please visit at a later point to view a complete list of documents in the claims
             folder.
           </Alert>
         </div>
@@ -33,7 +33,7 @@ export const LastRetrievalAlert = ({ appeal, manifestVbmsFetchedAt }) => {
         <div {...alertStyles}>
           <Alert title="Warning" type="warning">
             We last synced with VBMS {vbmsDiff} hours ago. If you'd like to check for new
-            documents, refresh the page.
+            documents, visit later.
           </Alert>
         </div>
       )}
