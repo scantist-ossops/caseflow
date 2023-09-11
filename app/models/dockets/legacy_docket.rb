@@ -84,6 +84,7 @@ class LegacyDocket < Docket
 
       dist_case = new_distributed_case(distribution, record, docket_type, genpop, true)
       save_dist_case(dist_case)
+      create_ama_workflow(distribution, dist_case) if FeatureToggle.enabled?(:vlj_legacy_appeal)
       dist_case
     end.compact
   end
@@ -106,6 +107,7 @@ class LegacyDocket < Docket
 
       dist_case = new_distributed_case(distribution, record, docket_type, genpop, false)
       save_dist_case(dist_case)
+      create_ama_workflow(distribution, dist_case) if FeatureToggle.enabled?(:vlj_legacy_appeal)
       dist_case
     end.compact
   end
@@ -119,6 +121,17 @@ class LegacyDocket < Docket
     else
       dist_case.save!
     end
+  end
+
+  def create_ama_workflow(distribution, dist_case)
+    appeal = LegacyAppeal.find_or_create_by_vacols_id(dist_case.case_id)
+    JudgeAssignTask.create!(
+      appeal: appeal,
+      parent_id: appeal.root_task&.id,
+      assigned_to_id: distribution.judge_id,
+      assigned_to_type: "User",
+      status: Constants.TASK_STATUSES.assigned
+    )
   end
 
   def existing_distribution_case_may_be_redistributed?(case_id, distribution)
