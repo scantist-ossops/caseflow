@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class AppealsController < ApplicationController
+  include UpdatePOAConcern
   before_action :react_routed
   before_action :set_application, only: [:document_count, :power_of_attorney, :update_power_of_attorney]
   # Only whitelist endpoints VSOs should have access to.
@@ -50,8 +51,36 @@ class AppealsController < ApplicationController
 
   def fetch_notification_list
     appeals_id = params[:appeals_id]
-    results = find_notifications_by_appeals_id(appeals_id)
-    render json: results
+    respond_to do |format|
+      format.json do
+        results = find_notifications_by_appeals_id(appeals_id)
+        render json: results
+      end
+      format.pdf do
+        request.headers["HTTP_PDF"]
+        appeal = get_appeal_object(appeals_id)
+        date = Time.zone.now.strftime("%Y-%m-%d %H.%M")
+        begin
+          if !appeal.nil?
+            pdf = PdfExportService.create_and_save_pdf("notification_report_pdf_template", appeal)
+            send_data pdf, filename: "Notification Report " + appeals_id + " " + date + ".pdf", type: "application/pdf", disposition: :attachment
+          else
+            raise ActionController::RoutingError.new('Appeal Not Found')
+          end
+        rescue StandardError => error
+          uuid = SecureRandom.uuid
+          Rails.logger.error(error.to_s + "Error ID: " + uuid)
+          Raven.capture_exception(error, extra: { error_uuid: uuid })
+          render json: { "errors": ["message": uuid] }, status: :internal_server_error
+        end
+      end
+      format.csv do
+        raise ActionController::ParameterMissing.new('Bad Format')
+      end
+      format.html do
+        raise ActionController::ParameterMissing.new('Bad Format')
+      end
+    end
   end
 
   def document_count
@@ -69,21 +98,7 @@ class AppealsController < ApplicationController
   end
 
   def update_power_of_attorney
-    clear_poa_not_found_cache
-    if cooldown_period_remaining > 0
-      render json: {
-        alert_type: "info",
-        message: "Information is current at this time. Please try again in #{cooldown_period_remaining} minutes",
-        power_of_attorney: power_of_attorney_data
-      }
-    else
-      message, result, status = update_or_delete_power_of_attorney!
-      render json: {
-        alert_type: result,
-        message: message,
-        power_of_attorney: (status == "updated") ? power_of_attorney_data : {}
-      }
-    end
+    update_poa_information(appeal)
   rescue StandardError => error
     render_error(error)
   end
@@ -151,6 +166,16 @@ class AppealsController < ApplicationController
 
   def update
     if request_issues_update.perform!
+      # if cc appeal, create SendInitialNotificationLetterTask
+      if appeal.contested_claim? && FeatureToggle.enabled?(:cc_appeal_workflow)
+        # check if an existing letter task is open
+        existing_letter_task_open = appeal.tasks.any? do |task|
+          task.class == SendInitialNotificationLetterTask && task.status == "assigned"
+        end
+        # create SendInitialNotificationLetterTask unless one is open
+        send_initial_notification_letter unless existing_letter_task_open
+      end
+
       set_flash_success_message
 
       render json: {
@@ -256,19 +281,23 @@ class AppealsController < ApplicationController
     !search.nil? && search.match?(/\d{6}-{1}\d+$/)
   end
 
-  def update_or_delete_power_of_attorney!
-    appeal.power_of_attorney&.try(:clear_bgs_power_of_attorney!) # clear memoization on legacy appeals
-    poa = appeal.bgs_power_of_attorney
-
-    if poa.blank?
-      ["Successfully refreshed. No power of attorney information was found at this time.", "success", "blank"]
-    elsif poa.bgs_record == :not_found
-      poa.destroy!
-      ["Successfully refreshed. No power of attorney information was found at this time.", "success", "deleted"]
-    else
-      poa.save_with_updated_bgs_record!
-      ["POA Updated Successfully", "success", "updated"]
+  def send_initial_notification_letter
+    # depending on the docket type, create cooresponding task as parent task
+    case appeal.docket_type
+    when "evidence_submission"
+      parent_task = @appeal.tasks.find_by(type: "EvidenceSubmissionWindowTask")
+    when "hearing"
+      parent_task = @appeal.tasks.find_by(type: "ScheduleHearingTask")
+    when "direct_review"
+      parent_task = @appeal.tasks.find_by(type: "DistributionTask")
     end
+    @send_initial_notification_letter ||= @appeal.tasks.open.find_by(type: :SendInitialNotificationLetterTask) ||
+                                          SendInitialNotificationLetterTask.create!(
+                                            appeal: @appeal,
+                                            parent: parent_task,
+                                            assigned_to: Organization.find_by_url("clerk-of-the-board"),
+                                            assigned_by: RequestStore[:current_user]
+                                          ) unless parent_task.nil?
   end
 
   def power_of_attorney_data
@@ -280,29 +309,6 @@ class AppealsController < ApplicationController
       representative_tz: appeal.representative_tz,
       poa_last_synced_at: appeal.poa_last_synced_at
     }
-  end
-
-  def clear_poa_not_found_cache
-    Rails.cache.delete("bgs-participant-poa-not-found-#{appeal&.veteran&.file_number}")
-    Rails.cache.delete("bgs-participant-poa-not-found-#{appeal&.claimant_participant_id}")
-  end
-
-  def cooldown_period_remaining
-    next_update_allowed_at = appeal.poa_last_synced_at + 10.minutes if appeal.poa_last_synced_at.present?
-    if next_update_allowed_at && next_update_allowed_at > Time.zone.now
-      return ((next_update_allowed_at - Time.zone.now) / 60).ceil
-    end
-
-    0
-  end
-
-  def render_error(error)
-    Rails.logger.error("#{error.message}\n#{error.backtrace.join("\n")}")
-    Raven.capture_exception(error, extra: { appeal_type: appeal.type, appeal_id: appeal.id })
-    render json: {
-      alert_type: "error",
-      message: "Something went wrong"
-    }, status: :unprocessable_entity
   end
 
   # Purpose: Fetches all notifications for an appeal
@@ -324,4 +330,18 @@ class AppealsController < ApplicationController
       WorkQueue::NotificationSerializer.new(@allowed_notifications).serializable_hash[:data]
     end
   end
+
+  # Notification report pdf template only accepts the Appeal or Legacy Appeal object
+  # Finds appeal object using appeals id passed through url params
+  def get_appeal_object(appeals_id)
+    type = Notification.find_by(appeals_id: appeals_id)&.appeals_type
+    if type == "LegacyAppeal"
+      LegacyAppeal.find_by(vacols_id: appeals_id)
+    elsif type == "Appeal"
+      Appeal.find_by(uuid: appeals_id)
+    elsif !type.nil?
+      nil
+    end
+  end
 end
+

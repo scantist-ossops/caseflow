@@ -106,6 +106,9 @@ const taskAttributesFromRawTask = (task) => {
       cssId: task.attributes.assigned_by?.css_id,
       pgId: task.attributes.assigned_by?.pg_id,
     },
+    completedBy: {
+      cssId: task?.attributes?.completed_by
+    },
     cancelledBy: {
       cssId: task.attributes.cancelled_by?.css_id,
     },
@@ -191,6 +194,7 @@ const appealAttributesFromRawTask = (task) => ({
   contestedClaim: task.attributes.contested_claim,
   veteranAppellantDeceased: task.attributes.veteran_appellant_deceased,
   issueCount: task.attributes.issue_count,
+  issueTypes: task.attributes.issue_types,
   docketNumber: task.attributes.docket_number,
   veteranFullName: task.attributes.veteran_full_name,
   veteranFileNumber: task.attributes.veteran_file_number,
@@ -433,6 +437,7 @@ export const prepareAppealForStore = (appeals) => {
       readableOriginalHearingRequestType:
         appeal.attributes.readable_original_hearing_request_type,
       vacateType: appeal.attributes.vacate_type,
+      cavcRemandsWithDashboard: appeal.attributes.cavc_remands_with_dashboard,
     };
 
     return accumulator;
@@ -447,6 +452,7 @@ export const prepareAppealForStore = (appeals) => {
         appeal.attributes['completed_hearing_on_previous_appeal?'],
       issues: prepareAppealIssuesForStore(appeal),
       decisionIssues: appeal.attributes.decision_issues,
+      substituteAppellantClaimantOptions: appeal.attributes.substitute_appellant_claimant_options,
       canEditRequestIssues: appeal.attributes.can_edit_request_issues,
       canEditCavcRemands: appeal.attributes.can_edit_cavc_remands,
       unrecognizedAppellantId: appeal.attributes.unrecognized_appellant_id,
@@ -502,6 +508,7 @@ export const prepareAppealForStore = (appeals) => {
         appeal.attributes.substitutions?.[0]?.target_appeal_uuid ===
         appeal.attributes.substitutions?.[0]?.source_appeal_uuid,
       remandSourceAppealId: appeal.attributes.remand_source_appeal_id,
+      showPostCavcStreamMsg: appeal.attributes.show_post_cavc_stream_msg,
       remandJudgeName: appeal.attributes.remand_judge_name,
       hasNotifications: appeal.attributes.has_notifications,
       locationHistory: prepareLocationHistoryForStore(appeal),
@@ -723,6 +730,14 @@ export const taskHasCompletedHold = (task) => {
   return false;
 };
 
+export const currentDaysOnHold = (task) => {
+  if (task.onHoldDuration && task.placedOnHoldAt) {
+    return moment().
+      startOf('day').
+      diff(moment(task.placedOnHoldAt), 'days');
+  }
+};
+
 export const taskIsActive = (task) =>
   ![TASK_STATUSES.completed, TASK_STATUSES.cancelled].includes(task.status);
 
@@ -797,19 +812,40 @@ export const timelineEventsFromAppeal = ({ appeal }) => {
 
   // Possibly add appellant substitution
   if (appeal.appellantSubstitution) {
-    timelineEvents.push({
-      type: 'substitutionDate',
-      createdAt: appeal.appellantSubstitution.substitution_date,
-    });
+    if (appeal.appellantSubstitution.histories) {
+      appeal.appellantSubstitution.histories.map((appellantSubstitutionHistory) => {
+        if (appellantSubstitutionHistory.substitution_date) {
+          timelineEvents.push({
+            type: 'substitutionDate',
+            createdAt: appellantSubstitutionHistory.substitution_date,
+          });
+        }
 
-    timelineEvents.push({
-      type: 'substitutionProcessed',
-      createdAt: appeal.appellantSubstitution.created_at,
-      createdBy: appeal.appellantSubstitution.created_by,
-      originalAppellantFullName:
-        appeal.appellantSubstitution.original_appellant_full_name,
-      substituteFullName: appeal.appellantSubstitution.substitute_full_name,
-    });
+        timelineEvents.push({
+          type: 'substitutionProcessed',
+          createdAt: appellantSubstitutionHistory.created_at,
+          createdBy: appellantSubstitutionHistory.created_by,
+          originalAppellantFullName: appellantSubstitutionHistory.original_appellant_full_name,
+          originalAppellantSubstituteFullName: appellantSubstitutionHistory.original_appellant_substitute_full_name,
+          currentAppellantSubstituteFullName: appellantSubstitutionHistory.current_appellant_substitute_full_name,
+          currentAppellantFullName: appellantSubstitutionHistory.current_appellant_full_name
+        });
+      });
+    } else {
+      timelineEvents.push({
+        type: 'substitutionDate',
+        createdAt: appeal.appellantSubstitution.substitution_date,
+      });
+
+      timelineEvents.push({
+        type: 'substitutionProcessed',
+        createdAt: appeal.appellantSubstitution.created_at,
+        createdBy: appeal.appellantSubstitution.created_by,
+        originalAppellantFullName:
+          appeal.appellantSubstitution.original_appellant_full_name,
+        currentAppellantSubstituteFullName: appeal.appellantSubstitution.substitute_full_name,
+      });
+    }
   }
 
   // Add any edits of NOD date
@@ -823,6 +859,13 @@ export const timelineEventsFromAppeal = ({ appeal }) => {
   }
 
   return timelineEvents;
+};
+
+export const formatSearchableDropdownOptions = (options) => {
+  return _.map(options, (value, key) => {
+    return { value: key,
+      label: value };
+  });
 };
 
 export const sortCaseTimelineEvents = (...eventArrays) => {
@@ -927,4 +970,48 @@ export const statusLabel = (appeal) => {
       StringUtil.snakeCaseToCapitalized(appeal.status) :
       '';
   }
+};
+
+const getMostRecentChildTask = (parentTask, tasks) => {
+  // Ignores LegacyTasks as they're only ever the children of RootTasks.
+  const amaTasks = tasks.filter((task) => !task.is_legacy);
+
+  // Sorts tasks by ID in descending order
+  const sortedTasks = amaTasks.sort((task_a, task_b) => {
+    return (parseInt(task_a.taskId, 10) > parseInt(task_b.taskId, 10)) ? -1 : 1;
+  });
+
+  return sortedTasks.find((task) => {
+    // The taskId value is a string while parentId is an integer..
+    return task.parentId === parseInt(parentTask.taskId, 10);
+  });
+};
+
+export const getPreviousTaskInstructions = (parentTask, tasks) => {
+  let reviewNotes = null;
+
+  const childTask = getMostRecentChildTask(parentTask, tasks);
+
+  if (childTask && childTask.instructions.length > 1) {
+    switch (childTask.assignedTo.type) {
+    case 'VhaProgramOffice':
+      reviewNotes = 'Program Office';
+      break;
+    case 'VhaRegionalOffice':
+      reviewNotes = 'VISN';
+      break;
+    case 'VhaCamo':
+      reviewNotes = 'CAMO';
+      break;
+    case 'EducationRpo':
+      reviewNotes = 'Regional Processing Office';
+      break;
+    default:
+      break;
+    }
+  }
+
+  const previousInstructions = reviewNotes ? childTask.instructions.slice(-1)[0] : null;
+
+  return { reviewNotes, previousInstructions };
 };

@@ -1,23 +1,26 @@
 /* eslint-disable max-lines */
 import * as React from 'react';
-import ReactMarkdown from 'react-markdown';
 import PropTypes from 'prop-types';
 import { bindActionCreators } from 'redux';
 import { connect } from 'react-redux';
 import { withRouter } from 'react-router-dom';
 import { sprintf } from 'sprintf-js';
 import RadioField from '../../components/RadioField';
-import { ATTORNEY_COMMENTS_MAX_LENGTH, marginTop, setHeight, slimHeight } from '../constants';
+import { ATTORNEY_COMMENTS_MAX_LENGTH, marginTop, setHeight } from '../constants';
 import TextareaField from 'app/components/TextareaField';
-import SearchableDropdown from '../../components/SearchableDropdown';
 import Alert from 'app/components/Alert';
 import COPY from '../../../COPY';
 import { taskById, appealWithDetailSelector, getAllTasksForAppeal } from '../selectors';
 import { onReceiveAmaTasks } from '../QueueActions';
 import { requestPatch } from '../uiReducer/uiActions';
-import { taskActionData } from '../utils';
+import {
+  currentDaysOnHold,
+  getPreviousTaskInstructions,
+  taskActionData,
+} from '../utils';
 import StringUtil from '../../util/StringUtil';
 import QueueFlowModal from './QueueFlowModal';
+import { VhaReturnToBoardIntakeModal } from './VhaReturnToBoardIntakeModal';
 
 const validRadio = (radio) => {
   return radio?.length > 0;
@@ -27,8 +30,34 @@ const validInstructions = (instructions) => {
   return instructions?.length > 0;
 };
 
+const validInstructionsForNumber = (instructions) => {
+  return (instructions > 45) && (instructions <= 364);
+};
+
 const validDropdown = (dropdown) => {
   return dropdown?.length > 0;
+};
+
+const formatOtherInstructions = (state) => {
+  let formattedInstructions = '';
+
+  if (state.dropdown === 'other') {
+    formattedInstructions += `\n**Reason for return:**\nOther - ${state.otherInstructions}`;
+  } else {
+    formattedInstructions += `\n**Reason for return:**\n${state.dropdown}`;
+  }
+
+  if (state.instructions) {
+    formattedInstructions += `\n\n**Detail:**\n${state.instructions}`;
+  }
+
+  return formattedInstructions;
+};
+
+const submitDisabled = ({ state }) => {
+  const { otherInstructions, radio } = state;
+
+  return !(radio === 'other' ? validRadio(otherInstructions) : validRadio(radio));
 };
 
 const MarkTaskCompleteModal = ({ props, state, setState }) => {
@@ -49,7 +78,6 @@ const MarkTaskCompleteModal = ({ props, state, setState }) => {
           onChange={(value) => setState({ instructions: value })}
           value={state.instructions}
           styling={marginTop(4)}
-          maxlength={ATTORNEY_COMMENTS_MAX_LENGTH}
           optional
         />
       )}
@@ -57,9 +85,212 @@ const MarkTaskCompleteModal = ({ props, state, setState }) => {
   );
 };
 
+const daysTypeOpts = [
+  { displayText: COPY.DAYS_CONTESTED_CLAIM, value: '45' },
+  { displayText: COPY.CUSTOM_CONTESTED_CLAIM, value: 'custom' }
+];
+
+const finalCompleteTaskRadio = [
+  { displayText: 'Yes', value: '1' },
+  { displayText: 'No', value: '0' }
+];
+
 MarkTaskCompleteModal.propTypes = {
   props: PropTypes.object,
   setState: PropTypes.func,
+  state: PropTypes.object
+};
+
+const MarkTaskCompleteContestedClaimModal = ({ props, state, setState }) => {
+  const taskConfiguration = taskActionData(props);
+  const instructionsLabel = taskConfiguration && taskConfiguration.instructions_label;
+  const currentType = props.task.type;
+
+  if (currentType === 'SendInitialNotificationLetterTask') {
+    return (
+      <React.Fragment>
+        <div className="cc_mark_complete">
+          {taskConfiguration && StringUtil.nl2br(taskConfiguration.modal_body)}
+          {taskConfiguration && taskConfiguration.modal_alert && (
+            <Alert message={taskConfiguration.modal_alert} type="info" />
+          )}
+          {(!taskConfiguration || !taskConfiguration.modal_hide_instructions) && (
+            <div>
+              <RadioField
+                id="45_days"
+                inputRef={props.register}
+                vertical
+                onChange={(value) => setState({ radio: value })}
+                value={state.radio}
+                options={daysTypeOpts}
+                errorMessage={props.highlightInvalid && !validRadio(state.radio) ? COPY.SELECT_RADIO_ERROR : null}
+                styling={marginTop(1)}
+              />
+              {state.radio === 'custom' &&
+                <TextareaField
+                  label={instructionsLabel || COPY.TEXTAREA_CONTESTED_CLAIM}
+                  name="instructions"
+                  id="completeTaskInstructions"
+                  onChange={(value) => setState({ instructions: value })}
+                  value={state.value}
+                  styling={marginTop(1.0)}
+                  textAreaStyling={setHeight(4.5)}
+                  pattern="[0-9]{2,3}"
+                  maxlength={ATTORNEY_COMMENTS_MAX_LENGTH}
+                />}
+            </div>
+          )}
+        </div>
+      </React.Fragment>
+    );
+  }
+
+  return (
+    <React.Fragment>
+      <div className="cc_mark_complete">
+        {taskConfiguration && StringUtil.nl2br(taskConfiguration.modal_body)}
+        {taskConfiguration && taskConfiguration.modal_alert && (
+          <Alert message={taskConfiguration.modal_alert} type="info" />
+        )}
+        {(!taskConfiguration || !taskConfiguration.modal_hide_instructions) && (
+          <div>
+            <RadioField
+              id="complete_task_final"
+              inputRef={props.register}
+              vertical
+              onChange={(value) => setState({ radio: value })}
+              value={state.radio}
+              options={finalCompleteTaskRadio}
+              errorMessage={props.highlightInvalid && !validRadio(state.radio) ? COPY.SELECT_RADIO_ERROR : null}
+              styling={marginTop(1)}
+            />
+            {state.radio === '1' &&
+              <TextareaField
+                label="Provide instructions and context for this action"
+                name="instructions"
+                id="completeTaskInstructions"
+                onChange={(value) => setState({ instructions: value })}
+                value={state.instructions}
+                styling={marginTop(1)}
+                maxlength={ATTORNEY_COMMENTS_MAX_LENGTH}
+                placeholder="This is a description of instructions and context for this action."
+                errorMessage={props.highlightInvalid &&
+                  !validInstructions(state.instructions) ? COPY.EMPTY_INSTRUCTIONS_ERROR : null}
+              />}
+          </div>
+        )}
+      </div>
+    </React.Fragment>
+  );
+};
+
+const ProceedFinalNotificationLetterTaskModal = ({ props, state, setState }) => {
+  const taskConfiguration = taskActionData(props);
+
+  return (
+    <React.Fragment>
+      {taskConfiguration && taskConfiguration.modal_body}
+      {taskConfiguration && taskConfiguration.modal_alert && (
+        <Alert message={taskConfiguration.modal_alert} type="info" />
+      )}
+      {(!taskConfiguration || !taskConfiguration.modal_hide_instructions) && (
+        <TextareaField
+          label="Provide instructions and context for this action"
+          name="instructions"
+          id="completeTaskInstructions"
+          onChange={(value) => setState({ instructions: value })}
+          value={state.instructions}
+          styling={marginTop(4)}
+          maxlength={ATTORNEY_COMMENTS_MAX_LENGTH}
+          placeholder="This is a description of instuctions and context for this action."
+          errorMessage={props.highlightInvalid &&
+            !validInstructions(state.instructions) ? COPY.EMPTY_INSTRUCTIONS_ERROR : null}
+        />
+      )}
+    </React.Fragment>
+  );
+};
+
+const ResendFinalNotificationLetterTaskModal = ({ props, state, setState }) => {
+  const taskConfiguration = taskActionData(props);
+
+  return (
+    <React.Fragment>
+      {taskConfiguration && taskConfiguration.modal_body}
+      {taskConfiguration && taskConfiguration.modal_alert && (
+        <Alert message={taskConfiguration.modal_alert} type="info" />
+      )}
+      {(!taskConfiguration || !taskConfiguration.modal_hide_instructions) && (
+        <TextareaField
+          label="Provide instructions and context for this action"
+          name="instructions"
+          id="completeTaskInstructions"
+          onChange={(value) => setState({ instructions: value })}
+          value={state.instructions}
+          styling={marginTop(4)}
+          maxlength={ATTORNEY_COMMENTS_MAX_LENGTH}
+          placeholder="This is a description of instuctions and context for this action."
+          errorMessage={props.highlightInvalid &&
+            !validInstructions(state.instructions) ? COPY.EMPTY_INSTRUCTIONS_ERROR : null}
+        />
+      )}
+    </React.Fragment>
+  );
+};
+
+const ResendInitialNotificationLetterTaskModal = ({ props, state, setState }) => {
+  const taskConfiguration = taskActionData(props);
+
+  return (
+    <React.Fragment>
+      {taskConfiguration && taskConfiguration.modal_body}
+      {taskConfiguration && taskConfiguration.modal_alert && (
+        <Alert message={taskConfiguration.modal_alert} type="info" />
+      )}
+      {(!taskConfiguration || !taskConfiguration.modal_hide_instructions) && (
+        <TextareaField
+          label="Provide instructions and context for this action"
+          name="instructions"
+          id="completeTaskInstructions"
+          onChange={(value) => setState({ instructions: value })}
+          value={state.instructions}
+          styling={marginTop(4)}
+          maxlength={ATTORNEY_COMMENTS_MAX_LENGTH}
+          placeholder="This is a description of instuctions and context for this action."
+          errorMessage={props.highlightInvalid &&
+            !validInstructions(state.instructions) ? COPY.EMPTY_INSTRUCTIONS_ERROR : null}
+        />
+      )}
+    </React.Fragment>
+  );
+};
+
+ResendInitialNotificationLetterTaskModal.propTypes = {
+  props: PropTypes.object,
+  setState: PropTypes.func,
+  highlightInvalid: PropTypes.bool,
+  state: PropTypes.object
+};
+MarkTaskCompleteContestedClaimModal.propTypes = {
+  props: PropTypes.object,
+  setState: PropTypes.func,
+  state: PropTypes.object,
+  register: PropTypes.func,
+  highlightInvalid: PropTypes.bool,
+  task: PropTypes.object
+};
+
+ProceedFinalNotificationLetterTaskModal.propTypes = {
+  props: PropTypes.object,
+  setState: PropTypes.func,
+  state: PropTypes.object,
+  highlightInvalid: PropTypes.bool
+};
+
+ResendFinalNotificationLetterTaskModal.propTypes = {
+  props: PropTypes.object,
+  setState: PropTypes.func,
+  highlightInvalid: PropTypes.bool,
   state: PropTypes.object
 };
 
@@ -90,7 +321,7 @@ const ReadyForReviewModal = ({ props, state, setState }) => {
   };
   const modalLabel = () => {
     if (getTaskType() === 'AssessDocumentationTask') {
-      return COPY.VHA_COMPLETE_TASK_MODAL_TITLE;
+      return StringUtil.nl2br(taskConfiguration.radio_field_label);
     } else if ((getTaskType() === 'VhaDocumentSearchTask') || (getTaskType()?.includes('Education'))) {
       return StringUtil.nl2br(COPY.DOCUMENTS_READY_FOR_BOARD_INTAKE_REVIEW_MODAL_BODY);
     }
@@ -100,9 +331,9 @@ const ReadyForReviewModal = ({ props, state, setState }) => {
 
   return (
     <React.Fragment>
-      {taskConfiguration && taskConfiguration.modal_body}
+      {taskConfiguration && StringUtil.nl2br(taskConfiguration.modal_body)}
       {(!taskConfiguration || !taskConfiguration.modal_hide_instructions) && (
-        <div>
+        <div style={{ marginTop: '1.25rem' }}>
           <RadioField
             name="completeTaskDocLocation"
             id="completeTaskDocLocation"
@@ -121,8 +352,8 @@ const ReadyForReviewModal = ({ props, state, setState }) => {
               id="completeTaskOtherInstructions"
               onChange={handleTextFieldChange}
               value={state.otherInstructions}
-              styling={marginTop(4)}
-              textAreaStyling={slimHeight}
+              styling={marginTop(1.0)}
+              textAreaStyling={setHeight(4.5)}
               errorMessage={props.highlightInvalid &&
                 !validInstructions(state.otherInstructions) ? COPY.EMPTY_INSTRUCTIONS_ERROR : null}
             />}
@@ -133,7 +364,7 @@ const ReadyForReviewModal = ({ props, state, setState }) => {
             onChange={(value) => setState({ instructions: value })}
             maxlength={ATTORNEY_COMMENTS_MAX_LENGTH}
             value={state.instructions}
-            styling={marginTop(4)}
+            styling={marginTop(1.5)}
             errorMessage={props.highlightInvalid &&
               !validInstructions(state.instructions) &&
               !isOptional() ? COPY.EMPTY_INSTRUCTIONS_ERROR :
@@ -154,72 +385,28 @@ ReadyForReviewModal.propTypes = {
   highlightInvalid: PropTypes.bool
 };
 
-const sendToBoardOpts = [
-  { displayText: COPY.VHA_SEND_TO_BOARD_INTAKE_MODAL_CORRECT_DOCUMENTS, value: 'correct documents' },
-  { displayText: COPY.VHA_SEND_TO_BOARD_INTAKE_MODAL_NOT_APPEALABLE, value: 'not appealable' },
-  { displayText: COPY.VHA_SEND_TO_BOARD_INTAKE_MODAL_NO_VHA_DECISION, value: 'no vha decision' },
-  { displayText: COPY.VHA_SEND_TO_BOARD_INTAKE_MODAL_NOT_VHA_RELATED, value: 'not vha related' }
-];
-
-const SendToBoardIntakeModal = ({ props, state, setState }) => {
+const VhaCamoReturnToBoardIntakeModal = ({ props, state, setState }) => {
   const taskConfiguration = taskActionData(props);
-  // if the VhaProgramOffice has completed a task, show the task instructions in the modal
-  const programOfficeInstructions = props.tasks.map((task) => {
-    return task && task.assignedTo.type === 'VhaProgramOffice' && task.instructions[1];
-  });
-
-  let filteredSendToBoardOpts = sendToBoardOpts;
-
-  if (!props.featureToggles.vha_irregular_appeals) {
-    filteredSendToBoardOpts = sendToBoardOpts.filter((opt) => {
-      return opt.displayText === COPY.VHA_SEND_TO_BOARD_INTAKE_MODAL_CORRECT_DOCUMENTS;
-    });
-  }
 
   return (
     <React.Fragment>
-      {programOfficeInstructions.some((i) => i) &&
-        <strong style= {{ color: '#323a45' }}>Notes from Program Office:</strong>}
-      {programOfficeInstructions.map((text) => (
-        <React.Fragment>
-          <div>
-            <ReactMarkdown>{text}</ReactMarkdown>
-          </div>
-        </React.Fragment>
-      ))}
-      {taskConfiguration && taskConfiguration.modal_body}
-      {(!taskConfiguration || !taskConfiguration.modal_hide_instructions) && (
-        <div>
-          <hr style= {{ marginBottom: '1.5em' }} />
-          <RadioField
-            name="sendToBoardIntakeOptions"
-            id="sendToBoardIntakeOptions"
-            label={COPY.VHA_SEND_TO_BOARD_INTAKE_MODAL_DETAIL}
-            inputRef={props.register}
-            vertical
-            onChange={(value) => setState({ radio: value })}
-            value={state.radio}
-            options={filteredSendToBoardOpts}
-            errorMessage={props.highlightInvalid && !validRadio(state.radio) ? COPY.SELECT_RADIO_ERROR : null}
-          />
-          <TextareaField
-            label={COPY.VHA_SEND_TO_BOARD_INTAKE_MODAL_BODY}
-            name="instructions"
-            id="vhaSendToBoardIntakeInstructions"
-            onChange={(value) => setState({ instructions: value })}
-            value={state.instructions}
-            styling={marginTop(4)}
-            maxlength={ATTORNEY_COMMENTS_MAX_LENGTH}
-            errorMessage={props.highlightInvalid &&
-              !validInstructions(state.instructions) ? COPY.EMPTY_INSTRUCTIONS_ERROR : null}
-          />
-        </div>
-      )}
+      <VhaReturnToBoardIntakeModal
+        modalBody={COPY.VHA_RETURN_TO_BOARD_INTAKE_MODAL_BODY}
+        dropdownLabel={COPY.VHA_RETURN_TO_BOARD_INTAKE_MODAL_DETAIL}
+        dropdownDefaultText={COPY.TASK_ACTION_DROPDOWN_BOX_LABEL_SHORT}
+        otherLabel={COPY.VHA_RETURN_TO_BOARD_INTAKE_OTHER_INSTRUCTIONS_LABEL}
+        instructionsLabel={COPY.VHA_RETURN_TO_BOARD_INTAKE_MODAL_INSTRUCTIONS_LABEL}
+        highlightInvalid={props.highlightInvalid}
+        taskConfiguration={taskConfiguration}
+        state={state}
+        setState={setState}
+        instructionsOptional
+      />
     </React.Fragment>
   );
 };
 
-SendToBoardIntakeModal.propTypes = {
+VhaCamoReturnToBoardIntakeModal.propTypes = {
   props: PropTypes.object,
   tasks: PropTypes.array,
   setState: PropTypes.func,
@@ -238,7 +425,7 @@ const ReturnToBoardIntakeModal = ({ props, state, setState }) => {
       {(!taskConfiguration || !taskConfiguration.modal_hide_instructions) && (
         <div>
           <TextareaField
-            label={COPY.EMO_RETURN_TO_BOARD_INTAKE_MODAL_BODY}
+            label={taskConfiguration.instructions_label || COPY.PRE_DOCKET_INSTRUCTIONS_LABEL}
             name="instructions"
             id="emoReturnToBoardIntakeInstructions"
             onChange={(value) => setState({ instructions: value })}
@@ -281,55 +468,20 @@ SendColocatedTaskModal.propTypes = {
 const VhaCaregiverSupportReturnToBoardIntakeModal = ({ props, state, setState }) => {
   const taskConfiguration = taskActionData(props);
 
-  const dropdownOptions = taskConfiguration.options;
-
-  const handleDropdownChange = ({ value }) => {
-    setState({ dropdown: value });
-    if (value === 'other') {
-      setState({ otherInstructions: '' });
-    }
-  };
-
   return (
     <React.Fragment>
-      {taskConfiguration && taskConfiguration.modal_body}
-      {(!taskConfiguration || !taskConfiguration.modal_hide_instructions) && (
-        <div style= {{ marginTop: '1.5rem' }}>
-          <SearchableDropdown
-            label={COPY.VHA_CAREGIVER_SUPPORT_RETURN_TO_BOARD_INTAKE_MODAL_DROPDOWN_LABEL}
-            defaultText={COPY.TASK_ACTION_DROPDOWN_BOX_LABEL_SHORT}
-            name="rejectReason"
-            id="caregiverSupportReturnToBoardIntakeReasonSelection"
-            options={dropdownOptions}
-            onChange={handleDropdownChange}
-            value={state.dropdown}
-            errorMessage={props.highlightInvalid &&
-              !validDropdown(state.dropdown) ? 'You must select a reason for returning to intake' : null}
-          />
-          {state.dropdown === 'other' &&
-            <TextareaField
-              label={COPY.VHA_CAREGIVER_SUPPORT_RETURN_TO_BOARD_INTAKE_MODAL_OTHER_REASON_TEXT_FIELD_LABEL}
-              name="otherRejectReason"
-              id="completeTaskOtherInstructions"
-              onChange={(value) => setState({ otherInstructions: value })}
-              value={state.otherInstructions}
-              styling={marginTop(2)}
-              textAreaStyling={setHeight(4.5)}
-              errorMessage={props.highlightInvalid &&
-                !validInstructions(state.otherInstructions) ? 'Return reason field is required' : null}
-            />}
-          <TextareaField
-            label={COPY.VHA_CAREGIVER_SUPPORT_RETURN_TO_BOARD_INTAKE_MODAL_TEXT_FIELD_LABEL}
-            name="instructions"
-            id="caregiverSupportReturnToBoardIntakeInstructions"
-            onChange={(value) => setState({ instructions: value })}
-            value={state.instructions}
-            styling={marginTop(2)}
-            maxlength={ATTORNEY_COMMENTS_MAX_LENGTH}
-            optional
-          />
-        </div>
-      )}
+      <VhaReturnToBoardIntakeModal
+        modalBody={COPY.VHA_CAREGIVER_SUPPORT_RETURN_TO_BOARD_INTAKE_MODAL_BODY}
+        dropdownLabel={COPY.VHA_CAREGIVER_SUPPORT_RETURN_TO_BOARD_INTAKE_MODAL_DROPDOWN_LABEL}
+        dropdownDefaultText={COPY.TASK_ACTION_DROPDOWN_BOX_LABEL_SHORT}
+        otherLabel={COPY.VHA_CAREGIVER_SUPPORT_RETURN_TO_BOARD_INTAKE_MODAL_OTHER_REASON_TEXT_FIELD_LABEL}
+        highlightInvalid={props.highlightInvalid}
+        instructionsLabel={COPY.VHA_CAREGIVER_SUPPORT_RETURN_TO_BOARD_INTAKE_MODAL_TEXT_FIELD_LABEL}
+        taskConfiguration={taskConfiguration}
+        state={state}
+        setState={setState}
+        instructionsOptional
+      />
     </React.Fragment>
   );
 };
@@ -348,26 +500,107 @@ const MODAL_TYPE_ATTRS = {
       detail: sprintf(COPY.MARK_TASK_COMPLETE_CONFIRMATION_DETAIL, contact)
     }),
     title: () => COPY.MARK_TASK_COMPLETE_TITLE,
-    getContent: MarkTaskCompleteModal,
-    buttonText: COPY.MARK_TASK_COMPLETE_BUTTON
+    getContent: MarkTaskCompleteModal
   },
+
+  task_complete_contested_claim: {
+    buildSuccessMsg: (appeal, { contact }) => ({
+      title: sprintf(COPY.MARK_TASK_COMPLETE_CONFIRMATION, appeal.veteranFullName),
+      detail: sprintf(COPY.MARK_TASK_COMPLETE_CONFIRMATION_DETAIL, contact)
+    }),
+    title: () => COPY.MARK_TASK_COMPLETE_TITLE_CONTESTED_CLAIM,
+    getContent: MarkTaskCompleteContestedClaimModal,
+    buttonText: COPY.MARK_TASK_COMPLETE_BUTTON_CONTESTED_CLAIM,
+    submitButtonClassNames: ['usa-button'],
+
+    customValidation: ({ state }) => {
+      const { instructions, radio } = state;
+
+      let isValid = true;
+
+      if (radio === 'custom') {
+        isValid = validInstructionsForNumber(instructions) && validRadio(radio);
+      } else if (radio === '45') {
+        isValid = validRadio(radio);
+      } else if (radio === '1') {
+        isValid = validInstructions(instructions) && validRadio(radio);
+      } else if (radio === '') {
+        isValid = validRadio(radio);
+      }
+
+      return isValid;
+    }
+  },
+
+  proceed_final_notification_letter_initial: {
+    buildSuccessMsg: () => ({
+      title: sprintf(COPY.PROCEED_FINAL_NOTIFICATION_LETTER_INITIAL_TASK_SUCCESS),
+    }),
+    title: () => COPY.PROCEED_FINAL_NOTIFICATION_LETTER_TITLE,
+    getContent: ProceedFinalNotificationLetterTaskModal,
+    buttonText: COPY.PROCEED_FINAL_NOTIFICATION_LETTER_BUTTON,
+    submitButtonClassNames: ['usa-button'],
+    customValidation: ({ state }) => (validInstructions(state.instructions))
+  },
+
+  proceed_final_notification_letter_post_holding: {
+    buildSuccessMsg: () => ({
+      title: sprintf(COPY.PROCEED_FINAL_NOTIFICATION_LETTER_POST_HOLDING_TASK_SUCCESS),
+    }),
+    title: () => COPY.PROCEED_FINAL_NOTIFICATION_LETTER_TITLE,
+    getContent: ProceedFinalNotificationLetterTaskModal,
+    buttonText: COPY.PROCEED_FINAL_NOTIFICATION_LETTER_BUTTON,
+    submitButtonClassNames: ['usa-button'],
+    customValidation: ({ state }) => (validInstructions(state.instructions))
+  },
+
+  resend_initial_notification_letter_post_holding: {
+    buildSuccessMsg: () => ({
+      title: sprintf(COPY.RESEND_INITIAL_NOTIFICATION_LETTER_POST_HOLDING_TASK_SUCCESS),
+    }),
+    title: () => COPY.RESEND_INITIAL_NOTIFICATION_LETTER_TITLE,
+    getContent: ResendInitialNotificationLetterTaskModal,
+    buttonText: COPY.RESEND_INITIAL_NOTIFICATION_LETTER_BUTTON,
+    submitButtonClassNames: ['usa-button'],
+    customValidation: ({ state }) => (validInstructions(state.instructions))
+  },
+
+  resend_initial_notification_letter_final: {
+    buildSuccessMsg: () => ({
+      title: sprintf(COPY.RESEND_INITIAL_NOTIFICATION_LETTER_FINAL_TASK_SUCCESS),
+    }),
+    title: () => COPY.RESEND_INITIAL_NOTIFICATION_LETTER_TITLE,
+    getContent: ResendInitialNotificationLetterTaskModal,
+    buttonText: COPY.RESEND_INITIAL_NOTIFICATION_LETTER_BUTTON,
+    submitButtonClassNames: ['usa-button'],
+    customValidation: ({ state }) => (validInstructions(state.instructions))
+  },
+
+  resend_final_notification_letter: {
+    buildSuccessMsg: () => ({
+      title: sprintf(COPY.RESEND_FINAL_NOTIFICATION_LETTER_TASK_SUCCESS),
+    }),
+    title: () => COPY.RESEND_FINAL_NOTIFICATION_LETTER_TITLE,
+    getContent: ResendFinalNotificationLetterTaskModal,
+    buttonText: COPY.RESEND_FINAL_NOTIFICATION_LETTER_BUTTON,
+    submitButtonClassNames: ['usa-button'],
+    customValidation: ({ state }) => (validInstructions(state.instructions))
+  },
+
   ready_for_review: {
     buildSuccessMsg: (appeal, { assignedToType }) => ({
       title: assignedToType === 'VhaProgramOffice' ?
         sprintf(COPY.VHA_COMPLETE_TASK_CONFIRMATION_PO, appeal.veteranFullName) :
         sprintf(COPY.VHA_COMPLETE_TASK_CONFIRMATION_VISN, appeal.veteranFullName)
     }),
-    title: () => COPY.DOCUMENTS_READY_FOR_BOARD_INTAKE_REVIEW_MODAL_TITLE,
-    getContent: ReadyForReviewModal,
-    buttonText: COPY.MODAL_SUBMIT_BUTTON
+    getContent: ReadyForReviewModal
   },
   send_colocated_task: {
     buildSuccessMsg: (appeal, { teamName }) => ({
       title: sprintf(COPY.COLOCATED_ACTION_SEND_TO_ANOTHER_TEAM_CONFIRMATION, appeal.veteranFullName, teamName)
     }),
     title: ({ teamName }) => sprintf(COPY.COLOCATED_ACTION_SEND_TO_ANOTHER_TEAM_HEAD, teamName),
-    getContent: SendColocatedTaskModal,
-    buttonText: COPY.COLOCATED_ACTION_SEND_TO_ANOTHER_TEAM_BUTTON
+    getContent: SendColocatedTaskModal
   },
   docket_appeal: {
     buildSuccessMsg: () => ({
@@ -375,16 +608,34 @@ const MODAL_TYPE_ATTRS = {
       detail: sprintf(COPY.DOCKET_APPEAL_CONFIRMATION_DETAIL)
     }),
     title: () => COPY.DOCKET_APPEAL_MODAL_TITLE,
-    getContent: MarkTaskCompleteModal,
-    buttonText: COPY.MODAL_CONFIRM_BUTTON
+    getContent: MarkTaskCompleteModal
   },
-  vha_send_to_board_intake: {
+  vha_documents_ready_for_bva_intake_for_review: {
     buildSuccessMsg: (appeal) => ({
-      title: sprintf(COPY.VHA_SEND_TO_BOARD_INTAKE_CONFIRMATION, appeal.veteranFullName)
+      title: sprintf(
+        COPY.VHA_CAREGIVER_SUPPORT_DOCUMENTS_READY_FOR_BOARD_INTAKE_REVIEW_CONFIRMATION_TITLE,
+        appeal.veteranFullName
+      )
     }),
-    title: () => COPY.VHA_SEND_TO_BOARD_INTAKE_MODAL_TITLE,
-    getContent: SendToBoardIntakeModal,
-    buttonText: COPY.MODAL_SUBMIT_BUTTON
+    title: () => COPY.DOCUMENTS_READY_FOR_BOARD_INTAKE_REVIEW_MODAL_TITLE,
+    getContent: ReadyForReviewModal,
+    buttonText: COPY.MODAL_SEND_BUTTON,
+    customValidation: submitDisabled
+  },
+  vha_return_to_board_intake: {
+    buildSuccessMsg: (appeal) => ({
+      title: sprintf(COPY.VHA_RETURN_TO_BOARD_INTAKE_CONFIRMATION, appeal.veteranFullName)
+    }),
+    title: () => COPY.VHA_RETURN_TO_BOARD_INTAKE_MODAL_TITLE,
+    getContent: VhaCamoReturnToBoardIntakeModal,
+    buttonText: COPY.MODAL_RETURN_BUTTON,
+    customValidation: ({ state }) => (
+      state.dropdown === 'other' ? validInstructions(state.otherInstructions) && validDropdown(state.dropdown) :
+        validDropdown(state.dropdown)
+    ),
+    customFormatInstructions: ({ state }) => {
+      return formatOtherInstructions(state);
+    }
   },
   emo_return_to_board_intake: {
     buildSuccessMsg: (appeal) => ({
@@ -392,23 +643,27 @@ const MODAL_TYPE_ATTRS = {
     }),
     title: () => COPY.EMO_RETURN_TO_BOARD_INTAKE_MODAL_TITLE,
     getContent: ReturnToBoardIntakeModal,
-    buttonText: COPY.MODAL_RETURN_BUTTON
+    customFormatInstructions: ({ state }) => {
+      if (state.instructions.length > 0) {
+        return `\n##### REASON FOR RETURN:\n${state.instructions}`;
+      }
+
+      return state.instructions;
+    }
   },
   emo_send_to_board_intake_for_review: {
     buildSuccessMsg: (appeal) => ({
       title: sprintf(COPY.EDU_SEND_TO_BOARD_INTAKE_FOR_REVIEW_CONFIRMATION_PO, appeal.veteranFullName)
     }),
     title: () => COPY.DOCUMENTS_READY_FOR_BOARD_INTAKE_REVIEW_MODAL_TITLE,
-    getContent: ReadyForReviewModal,
-    buttonText: COPY.MODAL_SUBMIT_BUTTON
+    getContent: ReadyForReviewModal
   },
   rpo_send_to_board_intake_for_review: {
     buildSuccessMsg: (appeal) => ({
       title: sprintf(COPY.EDU_SEND_TO_BOARD_INTAKE_FOR_REVIEW_CONFIRMATION_PO, appeal.veteranFullName)
     }),
     title: () => COPY.DOCUMENTS_READY_FOR_BOARD_INTAKE_REVIEW_MODAL_TITLE,
-    getContent: ReadyForReviewModal,
-    buttonText: COPY.MODAL_SUBMIT_BUTTON
+    getContent: ReadyForReviewModal
   },
   vha_caregiver_support_return_to_board_intake: {
     buildSuccessMsg: (appeal) => ({
@@ -416,11 +671,6 @@ const MODAL_TYPE_ATTRS = {
     }),
     title: () => COPY.VHA_CAREGIVER_SUPPORT_RETURN_TO_BOARD_INTAKE_MODAL_TITLE,
     getContent: VhaCaregiverSupportReturnToBoardIntakeModal,
-    buttonText: COPY.MODAL_RETURN_BUTTON,
-    submitButtonClassNames: ['usa-button'],
-    submitDisabled: ({ state }) => (
-      !validDropdown(state.dropdown) || (state.dropdown === 'other' && !validInstructions(state.otherInstructions))
-    ),
     customValidation: ({ state }) => (
       state.dropdown === 'other' ? validInstructions(state.otherInstructions) && validDropdown(state.dropdown) :
         validDropdown(state.dropdown)
@@ -429,19 +679,18 @@ const MODAL_TYPE_ATTRS = {
       let formattedInstructions = '';
 
       if (state.dropdown === 'other') {
-        formattedInstructions += `\n**Reason for return:**\nOther - ${state.otherInstructions}`;
+        formattedInstructions += `\n##### REASON FOR RETURN:\nOther - ${state.otherInstructions}`;
       } else {
-        formattedInstructions += `\n**Reason for return:**\n${state.dropdown}`;
+        formattedInstructions += `\n##### REASON FOR RETURN:\n${state.dropdown}`;
       }
 
       if (state.instructions) {
-        formattedInstructions += `\n\n**Detail:**\n${state.instructions}`;
+        formattedInstructions += `\n\n##### DETAILS:\n${state.instructions}`;
       }
 
       return formattedInstructions;
     }
   },
-
   vha_caregiver_support_send_to_board_intake_for_review: {
     buildSuccessMsg: (appeal) => ({
       title: sprintf(
@@ -449,21 +698,8 @@ const MODAL_TYPE_ATTRS = {
     }),
     title: () => COPY.DOCUMENTS_READY_FOR_BOARD_INTAKE_REVIEW_MODAL_TITLE,
     getContent: ReadyForReviewModal,
-    buttonText: COPY.MODAL_SEND_BUTTON,
-    submitDisabled: ({ state }) => {
-      const { otherInstructions, radio } = state;
-
-      let isValid = true;
-
-      if (radio === 'other') {
-        isValid = validInstructions(otherInstructions) && validRadio(radio);
-      } else {
-        isValid = validRadio(radio);
-      }
-
-      return !isValid;
-    }
-  },
+    customValidation: submitDisabled
+  }
 };
 
 class CompleteTaskModal extends React.Component {
@@ -515,55 +751,93 @@ class CompleteTaskModal extends React.Component {
     setState: this.setState.bind(this)
   });
 
+  formatRadio = () => {
+    const { instructions, radio } = this.state;
+
+    if (this.props.modalType === 'task_complete_contested_claim' &&
+      this.props.task.type === 'SendInitialNotificationLetterTask') {
+      const radioValue = daysTypeOpts.find((option) => radio === option.value).value;
+
+      if (radioValue === 'custom') {
+        return instructions;
+      }
+
+      return radioValue;
+    }
+
+    if (this.props.modalType === 'task_complete_contested_claim' &&
+      this.props.task.type === 'SendFinalNotificationLetterTask') {
+      const radioValue = finalCompleteTaskRadio.find((option) => radio === option.value).value;
+
+      return radioValue;
+    }
+  }
+
   formatInstructions = () => {
     const { instructions, radio, otherInstructions } = this.state;
     const formattedInstructions = [];
-    let reviewNotes;
-    const previousInstructions = this.props.tasks.map((task) => {
-      // Skip if there are no previous instructions
-      if (task.instructions?.[1]) {
-        if (task.assignedTo.type === 'VhaProgramOffice') {
-          reviewNotes = 'Program Office';
+    const {
+      previousInstructions,
+      reviewNotes
+    } = getPreviousTaskInstructions(this.props.task, this.props.tasks);
 
-          return task && task.instructions[1];
-        } else if (task.assignedTo.type === 'VhaRegionalOffice') {
-          reviewNotes = 'VISN';
+    if (this.props.modalType === 'task_complete_contested_claim' &&
+      this.props.task.type === 'SendInitialNotificationLetterTask') {
+      const radioValue = daysTypeOpts.find((option) => radio === option.value).value;
+      let days;
 
-          return task && task.instructions[1];
-        } else if (task.assignedTo.type === 'VhaCamo' && task.instructions.length > 0) {
-          reviewNotes = 'CAMO';
-
-          return task && task.instructions[1];
-        }
+      if (radioValue === 'custom') {
+        days = instructions;
+      } else {
+        days = radioValue;
       }
 
-      return reviewNotes = null;
-    });
+      formattedInstructions.push(`\n Hold time: ${days} days\n\n`);
 
-    if (this.props.modalType === 'vha_send_to_board_intake') {
-      const locationLabel = sendToBoardOpts.find((option) => radio === option.value).displayText;
+      return formattedInstructions[0];
+    }
 
-      formattedInstructions.push(`\n**Status:** ${locationLabel}\n`);
+    if (this.props.task.type === 'SendFinalNotificationLetterTask' &&
+      this.props.modalType === 'task_complete_contested_claim') {
+      const radioValue = finalCompleteTaskRadio.find((option) => radio === option.value).value;
 
-      if (reviewNotes) {
-        formattedInstructions.push(`\n\n**${reviewNotes} Notes:** ${previousInstructions.join('')}\n`);
+      if (radioValue === '0' || radioValue === '1') {
+        return formattedInstructions.join('');
       }
+    }
 
-      if (instructions) {
-        const instructionsDetail = `\n**CAMO Notes:** ${instructions}`;
+    if (this.props.task.type !== 'SendInitialNotificationLetterTask') {
+      if ((this.props.modalType === 'proceed_final_notification_letter_post_holding') ||
+        (this.props.modalType === 'resend_initial_notification_letter')) {
+        const currentTaskID = this.props.task.taskId;
 
-        formattedInstructions.splice(1, 0, instructionsDetail);
+        this.props.tasks.forEach((data) => {
+          if (data.taskId === currentTaskID) {
+            const onHolddays = currentDaysOnHold(data);
+            const totalDays = data.onHoldDuration;
+
+            return formattedInstructions.push(`\n Hold time: ${onHolddays} / ${totalDays} days\n\n`);
+          }
+        });
       }
-    } else if (this.props.modalType.includes('for_review')) {
+    }
+
+    if (this.props.modalType.includes('for_review')) {
       const locationLabel = locationTypeOpts.find((option) => radio === option.value).displayText;
-      const docLocationText = `Documents for this appeal are stored in ${radio === 'other' ? otherInstructions :
+
+      const docLocationText = `##### STATUS:\nDocuments for this appeal are stored in ${radio === 'other' ?
+        otherInstructions :
         locationLabel}.`;
 
       formattedInstructions.push(docLocationText);
-      if (instructions) {
-        const instructionsDetail = `\n\n**Detail:**\n\n${instructions}\n`;
 
-        formattedInstructions.push(instructionsDetail);
+      if (instructions) {
+        formattedInstructions.push(`\n\n##### DETAILS:\n${instructions}\n`);
+      }
+
+      // Do not add "Regional Processing Office Notes" section when RPO is sending to Intake for review
+      if (reviewNotes && reviewNotes !== 'Regional Processing Office') {
+        formattedInstructions.push(`\n### ${reviewNotes} Notes:\n${previousInstructions}\n`);
       }
     } else if (typeof MODAL_TYPE_ATTRS[this.props.modalType].customFormatInstructions === 'function') {
       formattedInstructions.push(
@@ -576,44 +850,64 @@ class CompleteTaskModal extends React.Component {
     return formattedInstructions.join('');
   };
 
-   validateForm = () => {
-     const { instructions, otherInstructions, radio } = this.state;
-     const modalType = this.props.modalType;
+  validateForm = () => {
+    const { instructions, otherInstructions, radio } = this.state;
+    const modalType = this.props.modalType;
 
-     let isValid = true;
+    let isValid = true;
 
-     if (modalType === 'vha_send_to_board_intake' || modalType === 'ready_for_review') {
-       isValid = validInstructions(instructions) && validRadio(radio);
-     }
+    if (modalType.includes('send_to_board_intake_for_review') ||
+      modalType === 'vha_documents_ready_for_bva_intake_for_review'
+    ) {
+      if (radio === 'other') {
+        isValid = validInstructions(otherInstructions) && validRadio(radio);
+      } else {
+        isValid = validRadio(radio);
+      }
 
-     if (modalType === 'emo_return_to_board_intake') {
-       isValid = validInstructions(instructions);
-     }
+      return isValid;
+    }
 
-     if (modalType === 'emo_send_to_board_intake_for_review' || modalType === 'rpo_send_to_board_intake_for_review') {
-       if (radio === 'other') {
-         isValid = validInstructions(otherInstructions) && validRadio(radio);
-       } else {
-         isValid = validRadio(radio);
-       }
-     }
+    if (modalType.includes('for_review')) {
+      if (radio === 'other') {
+        isValid = validInstructions(otherInstructions) && validRadio(radio) && validInstructions(instructions);
+      } else {
+        if (modalType === 'vha_documents_ready_for_bva_intake_for_review' ||
+          modalType === 'vha_return_to_board_intake'
+        ) {
+          isValid = validRadio(radio);
+        }
 
-     // Checks validity using the customValidation function defined in the modal constants if it is present
-     if (typeof MODAL_TYPE_ATTRS[this.props.modalType].customValidation === 'function') {
-       isValid = MODAL_TYPE_ATTRS[this.props.modalType].customValidation(this.getContentArgs());
-     }
+        isValid = validRadio(radio) && validInstructions(instructions);
+      }
+    }
 
-     return isValid;
-   }
+    if (modalType === 'emo_return_to_board_intake') {
+      isValid = validInstructions(instructions);
+    }
+
+    // Checks validity using the customValidation function defined in the modal constants if it is present
+    if (typeof MODAL_TYPE_ATTRS[this.props.modalType].customValidation === 'function') {
+      isValid = MODAL_TYPE_ATTRS[this.props.modalType].customValidation(this.getContentArgs());
+    }
+
+    return isValid;
+  }
 
   submit = () => {
     const { task, appeal } = this.props;
+    const statusValue = ((task.type === 'SendFinalNotificationLetterTask') &&
+      (MODAL_TYPE_ATTRS[this.props.modalType].title() === 'Resend initial notification letter') ?
+      'cancelled' : 'completed');
     const payload = {
       data: {
         task: {
-          status: 'completed',
-          instructions: this.formatInstructions()
-        }
+          status: statusValue,
+          instructions: this.formatInstructions(),
+        },
+        select_opc: this.props.modalType,
+        radio_value: this.formatRadio(),
+        instructions: this.state.instructions,
       }
     };
     const successMsg = MODAL_TYPE_ATTRS[this.props.modalType].buildSuccessMsg(
@@ -628,15 +922,22 @@ class CompleteTaskModal extends React.Component {
 
   render = () => {
     const modalAttributes = MODAL_TYPE_ATTRS[this.props.modalType];
+    const taskData = taskActionData(this.props);
+    const path = (
+      (MODAL_TYPE_ATTRS[this.props.modalType].buttonText === 'Proceed to final letter') ||
+      (MODAL_TYPE_ATTRS[this.props.modalType].buttonText === 'Resend notification letter') ||
+      (this.props.modalType === 'task_complete_contested_claim')
+    ) ? ('/organizations/clerk-of-the-board?tab=unassignedTab&page=1') : (taskData.redirect_after || '/queue');
 
     return (
       <QueueFlowModal
-        title={modalAttributes.title(this.getContentArgs())}
-        button={modalAttributes.buttonText}
-        submitDisabled={modalAttributes.submitDisabled?.(this.getContentArgs())}
+        title={taskData.modal_title || (modalAttributes.title && modalAttributes.title(this.getContentArgs()))}
+        /* eslint-disable-next-line camelcase */
+        button={taskData?.modal_button_text}
+        submitDisabled={!this.validateForm()}
         validateForm={this.validateForm}
         submit={this.submit}
-        pathAfterSubmit={this.getTaskConfiguration().redirect_after || '/queue'}
+        pathAfterSubmit={path}
         submitButtonClassNames={modalAttributes.submitButtonClassNames || ['usa-button']}
       >
         {this.props.task ?
@@ -665,7 +966,8 @@ CompleteTaskModal.propTypes = {
       type: PropTypes.string
     }),
     label: PropTypes.string,
-    taskId: PropTypes.string
+    taskId: PropTypes.string,
+    type: PropTypes.string
   }),
   featureToggles: PropTypes.object,
   highlightInvalid: PropTypes.bool

@@ -5,7 +5,7 @@ require "capybara-screenshot/rspec"
 require "selenium-webdriver"
 require "webdrivers"
 
-Webdrivers.logger.level = :DEBUG if ENV["DEBUG"]
+Webdrivers.logger.level = :debug if ENV["DEBUG"]
 
 Sniffybara::Driver.run_configuration_file = File.expand_path("VA-axe-run-configuration.json", __dir__)
 
@@ -64,6 +64,10 @@ Capybara.register_driver(:sniffybara_headless) do |app|
     :chrome, Capybara::Selenium::Driver::ChromeDriver
   )
   Sniffybara::Driver.current_driver = Sniffybara::Driver.new(app, options)
+end
+
+Capybara::Screenshot.register_filename_prefix_formatter(:rspec) do |example|
+  "screenshot_#{example.description.tr(' ', '-').gsub(/^.*\/spec\//, '')}"
 end
 
 Capybara::Screenshot.register_driver(:parallel_sniffybara) do |driver, path|

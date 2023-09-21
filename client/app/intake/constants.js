@@ -202,6 +202,7 @@ export const REVIEW_DATA_FIELDS = {
   supplementalClaim: {
     benefit_type: { key: 'benefitType', required: true },
     receipt_date: { key: 'receiptDate', required: true },
+    filed_by_va_gov: { key: 'filedByVaGov', required: false },
     claimant: { key: 'claimant' },
     unlisted_claimant: { key: 'unlistedClaimant' },
     poa: { key: 'poa' },
@@ -231,6 +232,12 @@ export const GENERIC_FORM_ERRORS = {
 export const RECEIPT_DATE_ERRORS = {
   invalid: 'Please enter a valid receipt date.',
   in_future: 'Receipt date cannot be in the future.'
+};
+
+export const SUBSTITUTE_DATE_ERRORS = {
+  invalid: 'Please enter a valid substitution granted date.',
+  in_future: 'Substitution granted date cannot be in the future.',
+  min_date_error: "Substitution granted date cannot be earlier than the NOD date or the Veteran's date of death"
 };
 
 export const CLAIMANT_ERRORS = {

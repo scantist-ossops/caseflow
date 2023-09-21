@@ -17,6 +17,14 @@ describe User, :all_dbs do
     Fakes::AuthenticationService.user_session = nil
   end
 
+  context ".first_time_logging_in" do
+    let!(:user) { create(:user, css_id: "NEWUSER") }
+
+    it "returns true unless user.last_login_at is false" do
+      expect(User.first_time_logging_in?(session)).to eq true
+    end
+  end
+
   context ".api_user" do
     it "returns the api user" do
       expect(User.api_user.station_id).to eq "101"
@@ -219,6 +227,17 @@ describe User, :all_dbs do
       subject { user.timezone }
       before { user.regional_office = nil }
       it { is_expected.to eq("America/Chicago") }
+    end
+
+    # for VSO users with multiple RO's
+    # regional_office will default to nil, but selected_regional_office will not
+    context "when ro isn't set for VSO user" do
+      let!(:vso_user) { create(:user, :vso_role, station_id: "327", selected_regional_office: "RO27") }
+      subject { vso_user.timezone }
+      before do
+        user.regional_office = nil
+      end
+      it { is_expected.to eq("America/Kentucky/Louisville") }
     end
   end
 
@@ -764,6 +783,56 @@ describe User, :all_dbs do
     end
   end
 
+  describe ".membership_requests" do
+    let(:user) { create(:user) }
+
+    subject { user.membership_requests }
+
+    it "should return an empty list" do
+      expect(subject).to eq([])
+    end
+
+    context "When the user has membership requests" do
+      let(:membership_requests) { create_list(:membership_request, 5) }
+
+      before do
+        membership_requests.each do |request|
+          request.requestor = user
+          request.save
+        end
+      end
+
+      it "should include those membership requests" do
+        expect(subject).to include(*membership_requests)
+      end
+    end
+  end
+
+  describe ".decided_membership_requests" do
+    let(:user) { create(:user) }
+
+    subject { user.decided_membership_requests }
+
+    it "should return an empty list" do
+      expect(subject).to eq([])
+    end
+
+    context "When the user has membership requests" do
+      let(:membership_requests) { create_list(:membership_request, 5) }
+
+      before do
+        membership_requests.each do |request|
+          request.decider = user
+          request.save
+        end
+      end
+
+      it "should include those membership requests" do
+        expect(subject).to include(*membership_requests)
+      end
+    end
+  end
+
   describe "can_edit_unrecognized_poa?" do
     let(:user) { create(:user) }
     subject { user.can_edit_unrecognized_poa? }
@@ -903,7 +972,8 @@ describe User, :all_dbs do
       end
 
       context "when the user is a member of many orgs" do
-        let(:judge_team) { JudgeTeam.create_for_judge(create(:user)) }
+        let(:judge) { create(:user) }
+        let(:judge_team) { JudgeTeam.create_for_judge(judge) }
         let(:other_orgs) { [Colocated.singleton, create(:organization)] }
 
         before { other_orgs.each { |org| org.add_user(user) } }
@@ -922,27 +992,23 @@ describe User, :all_dbs do
           end
         end
 
-        context "when marking the admin inactive", skip: "flaky test" do
+        context "when marking the admin inactive" do
           before do
-            OrganizationsUser.make_user_admin(user, judge_team)
-            allow(user).to receive(:judge_in_vacols?).and_return(false)
+            other_orgs.each { |org| org.add_user(judge) }
+            allow(judge).to receive(:judge_in_vacols?).and_return(false)
           end
 
           it "removes admin from all organizations, including JudgeTeam" do
-            if FeatureToggle.enabled?(:judge_admin_scm)
-              expect(judge_team.judge).not_to eq user
-              expect(user.selectable_organizations.length).to eq 3
-            else
-              expect(user.selectable_organizations.length).to eq 2
-            end
+            expect(judge_team.admin).to eq judge
+            expect(judge.organizations.size).to eq 3
+            expect(judge.selectable_organizations.length).to eq 3
 
-            expect(judge_team.admin).to eq user
-            expect(user.organizations.size).to eq 3
-            expect(subject).to eq true
-            expect(user.reload.status).to eq status
-            expect(user.status_updated_at.to_s).to eq Time.zone.now.to_s
-            expect(user.organizations.size).to eq 0
-            expect(user.selectable_organizations.length).to eq 0
+            expect(judge.update_status!(status)).to eq true
+            expect(judge.reload.status).to eq status
+
+            expect(judge.status_updated_at.to_s).to eq Time.zone.now.to_s
+            expect(judge.organizations.size).to eq 0
+            expect(judge.selectable_organizations.length).to eq 0
           end
         end
 

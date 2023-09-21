@@ -153,7 +153,7 @@ RSpec.feature "Case details", :all_dbs do
         expect(details_link.text).to eq(COPY::CASE_DETAILS_HEARING_DETAILS_LINK_COPY)
       end
 
-      context "the user has a VSO role", skip: "re-enable when pagination is fixed" do
+      context "the user has a VSO role" do
         let!(:vso) { create(:vso, name: "VSO", role: "VSO", url: "vso-url", participant_id: "8054") }
         let!(:vso_user) { create(:user, :vso_role) }
         let!(:vso_task) { create(:ama_vso_task, :in_progress, assigned_to: vso, appeal: appeal) }
@@ -569,7 +569,7 @@ RSpec.feature "Case details", :all_dbs do
         visit "/queue/appeals/#{appeal.uuid}"
         expect(page).to have_content("Refresh POA")
         click_on "Refresh POA"
-        expect(page).to have_content("POA Updated Successfully")
+        expect(page).to have_content(COPY::POA_UPDATED_SUCCESSFULLY)
         expect(page).to have_content("POA last refreshed on 01/01/2020")
       end
 
@@ -649,27 +649,43 @@ RSpec.feature "Case details", :all_dbs do
           )
         )
       end
+      # some of the below values are hardcoded in the veteran factory
+      let!(:inflated_bgs_veteran_record) do
+        { first_name: appeal.veteran.first_name,
+          last_name: appeal.veteran.last_name,
+          date_of_birth: 30.years.ago.to_date.strftime("%m/%d/%Y"),
+          date_of_death: nil,
+          name_suffix: appeal.veteran.name_suffix,
+          sex: "M",
+          address_line1: "1234 Main Street",
+          country: "USA",
+          zip_code: "12345",
+          state: "FL",
+          city: "Orlando",
+          file_number: appeal.veteran.file_number,
+          ssn: appeal.veteran.ssn,
+          email_address: "#{appeal.veteran.first_name}.#{appeal.veteran.last_name}@test.com",
+          ptcpnt_id: appeal.veteran.participant_id,
+          participant_id: appeal.veteran.participant_id }
+      end
+      let!(:bgs) { Fakes::BGSService.new }
 
       before do
-        Fakes::BGSService.inaccessible_appeal_vbms_ids = []
-        Fakes::BGSService.inaccessible_appeal_vbms_ids << appeal.veteran_file_number
+        bgs.class.mark_veteran_not_accessible(appeal.veteran_file_number)
         allow_any_instance_of(Fakes::BGSService).to receive(:fetch_veteran_info)
           .and_raise(BGS::ShareError, "NonUniqueResultException")
       end
 
-      scenario "access the appeal's case details", skip: "flake" do
-        visit "/queue/appeals/#{appeal.external_id}"
-
+      scenario "access the appeal's case details" do
+        reload_case_detail_page(appeal.external_id)
         expect(page).to have_content(COPY::DUPLICATE_PHONE_NUMBER_TITLE)
 
-        cache_key = Fakes::BGSService.new.can_access_cache_key(current_user, appeal.veteran_file_number)
-        expect(Rails.cache.exist?(cache_key)).to eq(false)
+        bgs.inaccessible_appeal_vbms_ids = []
+        allow_any_instance_of(Fakes::BGSService).to receive(:fetch_veteran_info)
+          .and_return(inflated_bgs_veteran_record)
 
-        allow_any_instance_of(Fakes::BGSService).to receive(:fetch_veteran_info).and_call_original
-        Fakes::BGSService.inaccessible_appeal_vbms_ids = []
         visit "/queue/appeals/#{appeal.external_id}"
-
-        expect(Rails.cache.exist?(cache_key)).to eq(true)
+        expect(page).to have_content(appeal.veteran_full_name)
       end
     end
   end
@@ -1506,7 +1522,6 @@ RSpec.feature "Case details", :all_dbs do
     before { FeatureToggle.enable!(:indicator_for_contested_claims) }
     after { FeatureToggle.disable!(:indicator_for_contested_claims) }
 
-
     it "should show the contested claim badge" do
       request_issues = [create(:request_issue,
                                benefit_type: "compensation",
@@ -2127,6 +2142,63 @@ RSpec.feature "Case details", :all_dbs do
       context "when the appeal is not yet dispatched" do
         let(:status) { :assigned_to_judge }
         it_behaves_like "the button is not shown"
+      end
+    end
+
+    describe "Add CAVC Dashboard button" do
+      let(:cavc_decision_type) do
+        [
+          Constants.CAVC_DECISION_TYPES.straight_reversal,
+          Constants.CAVC_DECISION_TYPES.death_dismissal
+        ].sample
+      end
+      let!(:cavc_remand) do
+        create(:cavc_remand,
+               cavc_decision_type: cavc_decision_type,
+               remand_subtype: nil,
+               judgement_date: 2.months.ago.to_date.mdY,
+               mandate_date: 2.months.ago.to_date.mdY)
+      end
+      let(:cavc_appeal) { cavc_remand.remand_appeal }
+
+      let(:non_occoai_user) { create(:user, css_id: "BVA_INTAKE_USER", station_id: "101") }
+      let(:occ_user) { create(:user, css_id: "TEST_OCC_USER", station_id: "101") }
+      let(:oai_user) { create(:user, css_id: "TEST_OAI_USER", station_id: "101") }
+
+      context "the button is not shown for non occ/oai user" do
+        before do
+          BvaIntake.singleton.add_user(non_occoai_user)
+          User.authenticate!(user: non_occoai_user)
+        end
+        it "the 'CAVC Dashboard' button is not visible on the page" do
+          reload_case_detail_page cavc_appeal.external_id
+
+          expect(page).to_not have_content(COPY::CAVC_DASHBOARD_BUTTON_TEXT)
+        end
+      end
+
+      context "the button is shown for OCC user" do
+        before do
+          OccTeam.singleton.add_user(occ_user)
+          User.authenticate!(user: occ_user)
+        end
+        it "the 'CAVC Dashboard' button is visible on the page" do
+          reload_case_detail_page cavc_appeal.external_id
+
+          expect(page).to have_content(COPY::CAVC_DASHBOARD_BUTTON_TEXT)
+        end
+      end
+
+      context "the button is shown for OAI user" do
+        before do
+          OaiTeam.singleton.add_user(oai_user)
+          User.authenticate!(user: oai_user)
+        end
+        it "the 'CAVC Dashboard' button is visible on the page" do
+          reload_case_detail_page cavc_appeal.external_id
+
+          expect(page).to have_content(COPY::CAVC_DASHBOARD_BUTTON_TEXT)
+        end
       end
     end
   end

@@ -34,6 +34,10 @@ class WorkQueue::TaskSerializer
     }
   end
 
+  attribute :completed_by do |object|
+    object.try(:completed_by).try(:css_id) unless object.appeal.is_a?(LegacyAppeal)
+  end
+
   attribute :assigned_to do |object|
     assignee = object.try(:unscoped_assigned_to)
 
@@ -131,6 +135,14 @@ class WorkQueue::TaskSerializer
 
   attribute :issue_count do |object|
     object.appeal.is_a?(LegacyAppeal) ? object.appeal.undecided_issues.count : object.appeal.number_of_issues
+  end
+
+  attribute :issue_types do |object|
+    if object.appeal.is_a?(LegacyAppeal)
+      object.appeal.issue_categories
+    else
+      object.appeal.request_issues.map(&:nonrating_issue_category)
+    end.join(",")
   end
 
   attribute :external_hearing_id do |object|

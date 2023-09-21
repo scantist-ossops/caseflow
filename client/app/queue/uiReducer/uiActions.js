@@ -20,6 +20,20 @@ export const setCanEditCavcRemands = (canEditCavcRemands) => ({
   }
 });
 
+export const setCanEditCavcDashboards = (canEditCavcDashboards) => ({
+  type: ACTIONS.SET_CAN_EDIT_CAVC_DASHBOARDS,
+  payload: {
+    canEditCavcDashboards
+  }
+});
+
+export const setCanViewCavcDashboards = (canViewCavcDashboards) => ({
+  type: ACTIONS.SET_CAN_VIEW_CAVC_DASHBOARDS,
+  payload: {
+    canViewCavcDashboards
+  }
+});
+
 export const setCanEditNodDate = (canEditNodDate) => ({
   type: ACTIONS.SET_CAN_EDIT_NOD_DATE,
   payload: {
@@ -206,10 +220,11 @@ export const setOrganizations = (organizations) => ({
   payload: { organizations }
 });
 
-export const setActiveOrganization = (id, name, isVso, userCanBulkAssign) => ({
+export const setActiveOrganization = (id, type, name, isVso, userCanBulkAssign) => ({
   type: ACTIONS.SET_ACTIVE_ORGANIZATION,
   payload: {
     id,
+    type,
     name,
     isVso,
     userCanBulkAssign

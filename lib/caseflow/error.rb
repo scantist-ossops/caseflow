@@ -31,6 +31,12 @@ module Caseflow::Error
   class EfolderAccessForbidden < EfolderError; end
   class ClientRequestError < EfolderError; end
 
+  class PriorityEndProductSyncError < StandardError
+    def ignorable?
+      true
+    end
+  end
+
   class VaDotGovAPIError < SerializableError; end
   class VaDotGovRequestError < VaDotGovAPIError; end
   class VaDotGovServerError < VaDotGovAPIError; end
@@ -182,15 +188,6 @@ module Caseflow::Error
   class CannotUpdateMandatedRemands < SerializableError
     def initialize
       @message = "Cavc Remands can only be updated if they did not have mandate"
-    end
-  end
-
-  class JmrAppealDecisionIssueMismatch < SerializableError
-    def initialize(args)
-      @code = args[:code] || 422
-      @decision_issue_ids = args[:decision_issue_ids]
-      @appeal_id = args[:appeal_id]
-      @message = args[:message] || "JMR remands must include all appeal decision issues."
     end
   end
 
@@ -349,6 +346,7 @@ module Caseflow::Error
   class AttributeNotLoaded < StandardError; end
   class VeteranNotFound < StandardError; end
   class AppealNotFound < StandardError; end
+  class MissingRecipientInfo < StandardError; end
 
   class EstablishClaimFailedInVBMS < StandardError
     attr_reader :error_code
@@ -456,4 +454,14 @@ module Caseflow::Error
   class VANotifyInternalServerError < VANotifyApiError; end
   class VANotifyRateLimitError < VANotifyApiError; end
   class EmptyQueueError < StandardError; end
+
+  # Pacman errors
+  class PacmanApiError < StandardError
+    include Caseflow::Error::ErrorSerializer
+    attr_accessor :code, :message
+  end
+  class PacmanBadRequestError < PacmanApiError; end
+  class PacmanForbiddenError < PacmanApiError; end
+  class PacmanNotFoundError < PacmanApiError; end
+  class PacmanInternalServerError < PacmanApiError; end
 end

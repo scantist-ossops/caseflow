@@ -40,7 +40,7 @@ import CaseTitle from './CaseTitle';
 import CaseTitleDetails from './CaseTitleDetails';
 import CavcDetail from './caseDetails/CavcDetail';
 import CaseDetailsPostDispatchActions from './CaseDetailsPostDispatchActions';
-import PowerOfAttorneyDetail from './PowerOfAttorneyDetail';
+import { PowerOfAttorneyDetail } from './PowerOfAttorneyDetail';
 import StickyNavContentArea from './StickyNavContentArea';
 import TaskSnapshot from './TaskSnapshot';
 import UserAlerts from '../components/UserAlerts';
@@ -93,7 +93,7 @@ const topAlertStyles = css({ marginBottom: '2.4rem' });
 
 export const CaseDetailsView = (props) => {
   const { push } = useHistory();
-  const { appealId, featureToggles } = props;
+  const { appealId, featureToggles, canViewCavcDashboards } = props;
   const appeal = useSelector((state) =>
     appealWithDetailSelector(state, { appealId })
   );
@@ -128,6 +128,7 @@ export const CaseDetailsView = (props) => {
       ['Clerk of the Board'].includes(organization.name)
     )
   );
+
   const modalIsOpen = window.location.pathname.includes('modal');
 
   const resetState = () => {
@@ -173,6 +174,10 @@ export const CaseDetailsView = (props) => {
 
   const appealIsDispatched = isAppealDispatched(appeal);
 
+  const appealHasRemandWithDashboard = useSelector((state) =>
+    state.queue.appeals[appealId].cavcRemandsWithDashboard > 0
+  );
+
   const editAppellantInformation = (
     [APPELLANT_TYPES.OTHER_CLAIMANT, APPELLANT_TYPES.HEALTHCARE_PROVIDER_CLAIMANT].includes(
       appeal.appellantType
@@ -186,7 +191,9 @@ export const CaseDetailsView = (props) => {
     ) && !appeal.hasPOA && props.featureToggles.edit_unrecognized_appellant_poa;
 
   const supportCavcRemand =
-    currentUserIsOnCavcLitSupport && !appeal.isLegacyAppeal;
+    currentUserIsOnCavcLitSupport && !appeal.isLegacyAppeal && appeal.issueCount > 0;
+
+  const supportCavcDashboard = canViewCavcDashboards && appealHasRemandWithDashboard;
 
   const hasSubstitution = appealHasSubstitution(appeal);
   const supportPostDispatchSubstitution = supportsSubstitutionPostDispatch({
@@ -204,7 +211,7 @@ export const CaseDetailsView = (props) => {
   });
 
   const showPostDispatch =
-    appealIsDispatched && (supportCavcRemand || supportPostDispatchSubstitution);
+    appealIsDispatched && (supportCavcRemand || supportPostDispatchSubstitution || supportCavcDashboard);
 
   const actionableScheduledHearingTasks = useSelector(
     (state) => openScheduleHearingTasksForAppeal(state, { appealId: appeal.externalId })
@@ -267,6 +274,7 @@ export const CaseDetailsView = (props) => {
           appealId={appealId}
           includeCavcRemand={supportCavcRemand}
           includeSubstitute={supportPostDispatchSubstitution}
+          supportCavcDashboard={supportCavcDashboard}
         />
       )}
       {(!modalIsOpen || props.userCanScheduleVirtualHearings) && <UserAlerts />}
@@ -401,6 +409,8 @@ export const CaseDetailsView = (props) => {
                   </span>
                 )
               }
+              appealId={appealId}
+              canViewCavcDashboards={canViewCavcDashboards}
               {...appeal.cavcRemand}
             />
           )}
@@ -409,14 +419,14 @@ export const CaseDetailsView = (props) => {
             additionalHeaderContent={
               true && (
                 <span className="cf-push-right" {...anchorEditLinkStyling}>
-                  { appeal.hasNotifications &&
-                  <Link id="notification-link" href={`/queue/appeals/${appealId}/notifications`} target="_blank">
-                    {COPY.VIEW_NOTIFICATION_LINK}
-                    &nbsp;
-                    <span {...ICON_POSITION_FIX}>
-                      <ExternalLinkIcon color={COLORS.PRIMARY} size={ICON_SIZES.SMALL} />
-                    </span>
-                  </Link>}
+                  {appeal.hasNotifications &&
+                    <Link id="notification-link" href={`/queue/appeals/${appealId}/notifications`} target="_blank">
+                      {COPY.VIEW_NOTIFICATION_LINK}
+                      &nbsp;
+                      <span {...ICON_POSITION_FIX}>
+                        <ExternalLinkIcon color={COLORS.PRIMARY} size={ICON_SIZES.SMALL} />
+                      </span>
+                    </Link>}
                 </span>
               )
             }
@@ -447,7 +457,8 @@ CaseDetailsView.propTypes = {
   pollHearing: PropTypes.bool,
   stopPollingHearing: PropTypes.func,
   substituteAppellant: PropTypes.object,
-  vsoVirtualOptIn: PropTypes.bool
+  vsoVirtualOptIn: PropTypes.bool,
+  canViewCavcDashboards: PropTypes.bool
 };
 
 const mapStateToProps = (state) => ({
@@ -455,6 +466,7 @@ const mapStateToProps = (state) => ({
   pollHearing: state.components.scheduledHearing.polling,
   featureToggles: state.ui.featureToggles,
   substituteAppellant: state.substituteAppellant,
+  canViewCavcDashboards: state.ui.canViewCavcDashboards
 });
 
 const mapDispatchToProps = (dispatch) =>

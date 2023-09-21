@@ -23,14 +23,14 @@ class PushPriorityAppealsToJudgesJob < CaseflowJob
     start_time ||= Time.zone.now # temporary fix to get this job to succeed
     duration = time_ago_in_words(start_time)
     slack_msg = "<!here>\n [ERROR] after running for #{duration}: #{error.message}"
-    slack_service.send_notification(slack_msg, self.class.name, "#appeals-job-alerts")
+    slack_service.send_notification(slack_msg, self.class.name)
     log_error(error)
   ensure
     datadog_report_runtime(metric_group_name: "priority_appeal_push_job")
   end
 
   def send_job_report
-    slack_service.send_notification(slack_report.join("\n"), self.class.name, "#appeals-job-alerts")
+    slack_service.send_notification(slack_report.join("\n"), self.class.name)
   end
 
   def slack_report
@@ -57,7 +57,9 @@ class PushPriorityAppealsToJudgesJob < CaseflowJob
     docket_coordinator.dockets.each_pair do |sym, docket|
       report << "*Number of #{sym} appeals _not_ distributed*: #{docket.count(priority: true, ready: true)}"
     end
-    report << "*Number of Legacy Hearing Non Genpop appeals _not_ distributed*: #{legacy_not_genpop_count}"
+    unless disable_legacy?
+      report << "*Number of Legacy Hearing Non Genpop appeals _not_ distributed*: #{legacy_not_genpop_count}"
+    end
 
     report << ""
     report << "*Debugging information*"
@@ -177,6 +179,10 @@ class PushPriorityAppealsToJudgesJob < CaseflowJob
 
   def use_by_docket_date?
     FeatureToggle.enabled?(:acd_distribute_by_docket_date, user: RequestStore.store[:current_user])
+  end
+
+  def disable_legacy?
+    FeatureToggle.enabled?(:acd_disable_legacy_distributions, user: RequestStore.store[:current_user])
   end
 
   def legacy_not_genpop_count

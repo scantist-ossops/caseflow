@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema.define(version: 2022_12_15_202259) do
+ActiveRecord::Schema.define(version: 2023_08_01_195310) do
 
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
@@ -91,7 +91,7 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.boolean "appeal_docketed", default: false, null: false, comment: "When true, appeal has been docketed"
     t.bigint "appeal_id", null: false, comment: "AMA or Legacy Appeal ID"
     t.string "appeal_type", null: false, comment: "Appeal Type (Appeal or LegacyAppeal)"
-    t.datetime "created_at", null: false, comment: "Date and Time the record was inserted into the table"
+    t.datetime "created_at", null: false
     t.bigint "created_by_id", null: false, comment: "User id of the user that inserted the record"
     t.boolean "decision_mailed", default: false, null: false, comment: "When true, appeal has decision mail request complete"
     t.boolean "hearing_postponed", default: false, null: false, comment: "When true, appeal has hearing postponed and no hearings scheduled"
@@ -100,7 +100,7 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.boolean "privacy_act_complete", default: false, null: false, comment: "When true, appeal has a privacy act request completed"
     t.boolean "privacy_act_pending", default: false, null: false, comment: "When true, appeal has a privacy act request still open"
     t.boolean "scheduled_in_error", default: false, null: false, comment: "When true, hearing was scheduled in error and none scheduled"
-    t.datetime "updated_at", comment: "Date and time the record was last updated"
+    t.datetime "updated_at"
     t.bigint "updated_by_id", comment: "User id of the last user that updated the record"
     t.boolean "vso_ihp_complete", default: false, null: false, comment: "When true, appeal has a VSO IHP request completed"
     t.boolean "vso_ihp_pending", default: false, null: false, comment: "When true, appeal has a VSO IHP request pending"
@@ -150,6 +150,19 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.index ["updated_at"], name: "index_appeals_on_updated_at"
     t.index ["uuid"], name: "index_appeals_on_uuid"
     t.index ["veteran_file_number"], name: "index_appeals_on_veteran_file_number"
+  end
+
+  create_table "appellant_substitution_histories", force: :cascade do |t|
+    t.bigint "appellant_substitution_id", comment: "Appellant substitution id of the last user that updated the CAVC record"
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", comment: "Current user who created Appellant substitution"
+    t.string "current_appellant_substitute_participant_id", comment: "Current Appellant Substitute participant Id"
+    t.string "current_appellant_veteran_participant_id", comment: "Current Appellant Veteran participant Id"
+    t.string "original_appellant_substitute_participant_id", comment: "Original Appellant Substitute participant Id"
+    t.string "original_appellant_veteran_participant_id", comment: "Original Appeallant Veteran Participant Id"
+    t.date "substitution_date", comment: "Timestamp of substitution granted date"
+    t.datetime "updated_at", null: false
+    t.index ["appellant_substitution_id"], name: "index_appellant_sub_histories_on_appellant_substitution_id"
   end
 
   create_table "appellant_substitutions", comment: "Store appellant substitution form data", force: :cascade do |t|
@@ -205,6 +218,21 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.index ["appeal_id", "appeal_type"], name: "index_available_hearing_locations_on_appeal_id_and_appeal_type"
     t.index ["updated_at"], name: "index_available_hearing_locations_on_updated_at"
     t.index ["veteran_file_number"], name: "index_available_hearing_locations_on_veteran_file_number"
+  end
+
+  create_table "batch_processes", primary_key: "batch_id", id: :uuid, default: -> { "uuid_generate_v4()" }, comment: "A generalized table for batching and processing records within caseflow", force: :cascade do |t|
+    t.string "batch_type", null: false, comment: "Indicates what type of record is being batched"
+    t.datetime "created_at", null: false, comment: "Date and Time that batch was created."
+    t.datetime "ended_at", comment: "The date/time that the batch finsished processing"
+    t.integer "records_attempted", default: 0, comment: "The number of records in the batch attempting to be processed"
+    t.integer "records_completed", default: 0, comment: "The number of records in the batch that completed processing successfully"
+    t.integer "records_failed", default: 0, comment: "The number of records in the batch that failed processing"
+    t.datetime "started_at", comment: "The date/time that the batch began processing"
+    t.string "state", default: "PRE_PROCESSING", null: false, comment: "The state that the batch is currently in. PRE_PROCESSING, PROCESSING, PROCESSED"
+    t.datetime "updated_at", null: false, comment: "Date and Time that batch was last updated."
+    t.index ["batch_type"], name: "index_batch_processes_on_batch_type"
+    t.index ["records_failed"], name: "index_batch_processes_on_records_failed"
+    t.index ["state"], name: "index_batch_processes_on_state"
   end
 
   create_table "bgs_attorneys", comment: "Cache of unique BGS attorney data — used for adding claimants to cases pulled from POA data", force: :cascade do |t|
@@ -280,6 +308,7 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.string "hearing_request_type", limit: 10, comment: "Stores hearing type requested by appellant; could be one of nil, 'Video', 'Central', 'Travel', or 'Virtual'"
     t.boolean "is_aod", comment: "Whether the case is Advanced on Docket"
     t.integer "issue_count", comment: "Number of issues on the appeal."
+    t.string "issue_types", comment: "A string delimited list of nonrating issue categories on the appeal."
     t.string "power_of_attorney_name", comment: "'Firstname Lastname' of power of attorney"
     t.string "suggested_hearing_location", comment: "Suggested hearing location in 'City, State (Facility Type)' format"
     t.datetime "updated_at"
@@ -316,6 +345,85 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.index ["updated_at"], name: "index_cached_user_attributes_on_updated_at"
   end
 
+  create_table "caseflow_stuck_records", comment: "This is a polymorphic table consisting of records that have repeatedly errored out of the syncing process. Currently, the only records on this table come from the PriorityEndProductSyncQueue table.", force: :cascade do |t|
+    t.datetime "determined_stuck_at", null: false, comment: "The date/time at which the record in question was determined to be stuck."
+    t.string "error_messages", default: [], comment: "Array of Error Message(s) containing Batch ID and specific error if a failure occurs", array: true
+    t.boolean "remediated", default: false, null: false, comment: "Reflects if the stuck record has been reviewed and fixed"
+    t.text "remediation_notes", comment: "Brief description of the encountered issue and remediation strategy"
+    t.bigint "stuck_record_id", null: false, comment: "The id / primary key of the stuck record and the type / where the record came from"
+    t.string "stuck_record_type", null: false
+    t.datetime "updated_at", comment: "The time an update occurred on the record"
+    t.index ["stuck_record_type", "stuck_record_id"], name: "index_caseflow_stuck_records_on_stuck_record_id_and_type"
+  end
+
+  create_table "cavc_dashboard_dispositions", force: :cascade do |t|
+    t.bigint "cavc_dashboard_id", comment: "ID of the associated CAVC Dashboard"
+    t.bigint "cavc_dashboard_issue_id"
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", comment: "The ID for the user that created the record"
+    t.string "disposition", comment: "The disposition of the issue"
+    t.bigint "request_issue_id", comment: "ID for a request issue that was filed with the CAVC Remand"
+    t.datetime "updated_at", null: false
+    t.bigint "updated_by_id", comment: "The ID for the user that most recently changed the record"
+    t.index ["cavc_dashboard_id"], name: "index_cavc_dashboard_dispositions_on_cavc_dashboard_id"
+  end
+
+  create_table "cavc_dashboard_issues", force: :cascade do |t|
+    t.string "benefit_type"
+    t.bigint "cavc_dashboard_id", comment: "ID of the associated CAVC Dashboard"
+    t.datetime "created_at"
+    t.bigint "created_by_id"
+    t.string "issue_category"
+    t.string "issue_description"
+    t.datetime "updated_at"
+    t.bigint "updated_by_id"
+    t.index ["cavc_dashboard_id"], name: "index_cavc_dashboard_issues_on_cavc_dashboard_id"
+  end
+
+  create_table "cavc_dashboards", force: :cascade do |t|
+    t.date "board_decision_date", comment: "The decision date of the source appeal"
+    t.string "board_docket_number", comment: "The docket number of the source appeal"
+    t.date "cavc_decision_date", comment: "The decision date from the CAVC board"
+    t.string "cavc_docket_number", comment: "The docket number assigned by the CAVC board"
+    t.bigint "cavc_remand_id", comment: "ID of the associated CAVC Remand"
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", comment: "The ID for the user that created the record"
+    t.boolean "joint_motion_for_remand", comment: "Whether the CAVC appeal is JMR/JMPR or not"
+    t.datetime "updated_at", null: false
+    t.bigint "updated_by_id", comment: "The ID for the user that most recently changed the record"
+    t.index ["cavc_remand_id"], name: "index_cavc_dashboards_on_cavc_remand_id"
+  end
+
+  create_table "cavc_decision_reasons", force: :cascade do |t|
+    t.string "basis_for_selection_category", comment: "The category that the decision reason belongs to. Optional."
+    t.datetime "created_at"
+    t.string "decision_reason", comment: "The reason for the CAVC decision"
+    t.integer "order", comment: "The order that the reasons should display in the UI. Child reasons will be ordered under their parent."
+    t.integer "parent_decision_reason_id", comment: "Associates a child decision reason to its parent in this table"
+  end
+
+  create_table "cavc_dispositions_to_reasons", force: :cascade do |t|
+    t.bigint "cavc_dashboard_disposition_id", comment: "ID of the associated CAVC Dashboard Disposition"
+    t.bigint "cavc_decision_reason_id", comment: "ID of the associated CAVC Decision Reason"
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", comment: "The ID for the user that created the record"
+    t.datetime "updated_at", null: false
+    t.bigint "updated_by_id", comment: "The ID for the user that most recently changed the record"
+    t.index ["cavc_dashboard_disposition_id"], name: "cavc_disp_to_reason_cavc_dash_disp_id"
+    t.index ["cavc_decision_reason_id"], name: "index_cavc_dispositions_to_reasons_on_cavc_decision_reason_id"
+  end
+
+  create_table "cavc_reasons_to_bases", force: :cascade do |t|
+    t.bigint "cavc_dispositions_to_reason_id", comment: "ID of the associated CAVC Decision Reason"
+    t.bigint "cavc_selection_basis_id", comment: "ID of the associated CAVC Basis for Selection"
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", comment: "The ID for the user that created the record"
+    t.datetime "updated_at", null: false
+    t.bigint "updated_by_id", comment: "The ID for the user that most recently changed the record"
+    t.index ["cavc_dispositions_to_reason_id"], name: "index_cavc_reasons_to_bases_on_cavc_dispositions_to_reason_id"
+    t.index ["cavc_selection_basis_id"], name: "index_cavc_reasons_to_bases_on_cavc_selection_basis_id"
+  end
+
   create_table "cavc_remands", force: :cascade do |t|
     t.string "cavc_decision_type", null: false, comment: "CAVC decision type. Expecting 'remand', 'straight_reversal', or 'death_dismissal'"
     t.string "cavc_docket_number", null: false, comment: "Docket number of the CAVC judgement"
@@ -336,6 +444,33 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.bigint "updated_by_id", comment: "User that updated this record. For MDR remands, judgement and mandate dates will be added after the record is first created."
     t.index ["remand_appeal_id"], name: "index_cavc_remands_on_remand_appeal_id"
     t.index ["source_appeal_id"], name: "index_cavc_remands_on_source_appeal_id"
+  end
+
+  create_table "cavc_remands_appellant_substitutions", force: :cascade do |t|
+    t.bigint "appellant_substitution_id", comment: "Appellant Substitution this is tied to"
+    t.bigint "cavc_remand_id", comment: "Cavc Remand this is tied to"
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id", comment: "Current user who created substitution"
+    t.boolean "is_appellant_substituted", comment: "Y/N Boolean for active substitution"
+    t.string "participant_id", comment: "Claimant Participant Id"
+    t.string "remand_source", comment: "Source of Remand - From Add or Edit"
+    t.string "substitute_participant_id", comment: "Appellant Substitute participant Id"
+    t.date "substitution_date", comment: "Timestamp of substitution"
+    t.datetime "updated_at", null: false
+    t.bigint "updated_by_id", comment: "Current user who updated substitution"
+    t.index ["appellant_substitution_id"], name: "index_on_appellant_substitution_id"
+    t.index ["cavc_remand_id"], name: "index_on_cavc_remand_id"
+    t.index ["participant_id"], name: "index_on_participant_id"
+    t.index ["substitute_participant_id"], name: "index_on_substitute_participant_id"
+  end
+
+  create_table "cavc_selection_bases", force: :cascade do |t|
+    t.string "basis_for_selection"
+    t.string "category"
+    t.datetime "created_at"
+    t.bigint "created_by"
+    t.datetime "updated_at"
+    t.bigint "updated_by"
   end
 
   create_table "certification_cancellations", id: :serial, force: :cascade do |t|
@@ -441,6 +576,8 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.integer "conference_id", comment: "Id of the conference"
     t.datetime "created_at", null: false, comment: "Date and Time of creation"
     t.bigint "created_by_id", null: false, comment: "User id of the user who created the record. FK on User table"
+    t.string "guest_hearing_link", comment: "Guest link for hearing daily docket."
+    t.string "guest_pin_long", comment: "Pin provided for the guest, allowing them entry into the video conference."
     t.bigint "hearing_day_id", null: false, comment: "The associated hearing day id"
     t.string "host_link", comment: "Conference link generated from external conference service"
     t.integer "host_pin", comment: "Pin for the host of the conference to get into the conference"
@@ -460,6 +597,8 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.string "citation_number", null: false, comment: "Unique identifier for decision document"
     t.datetime "created_at", null: false
     t.date "decision_date", null: false
+    t.string "document_series_reference_id", comment: "UUID that is provided by eFolder that represents the group of documentsthis document belongs to. Think of a series as a stack of versions."
+    t.string "document_version_reference_id", comment: "UUID that is provided by eFolder that represents the specific version of the document."
     t.string "error", comment: "Message captured from a failed attempt"
     t.datetime "last_submitted_at", comment: "When the job is eligible to run (can be reset to restart the job)"
     t.datetime "processed_at", comment: "When the job has concluded"
@@ -652,6 +791,7 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.datetime "updated_at"
     t.integer "user_id", comment: "The ID of the user who performed the decision review intake."
     t.string "veteran_file_number", null: false, comment: "PII. The file number of the Veteran submitted when establishing the end product."
+    t.index ["reference_id"], name: "index_end_product_establishments_on_reference_id"
     t.index ["source_type", "source_id"], name: "index_end_product_establishments_on_source_type_and_source_id"
     t.index ["updated_at"], name: "index_end_product_establishments_on_updated_at"
     t.index ["user_id"], name: "index_end_product_establishments_on_user_id"
@@ -1084,6 +1224,20 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.index ["request_issue_id"], name: "index_legacy_issues_on_request_issue_id"
   end
 
+  create_table "membership_requests", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.datetime "decided_at", comment: "The date and time when the deider user made a decision about the membership request"
+    t.bigint "decider_id", comment: "The user who decides the status of the membership request"
+    t.string "note", comment: "A note that provides additional context from the requestor about their request for access to the organization"
+    t.bigint "organization_id", comment: "The organization that the membership request is asking to join"
+    t.bigint "requestor_id", comment: "The User that is requesting access to the organization"
+    t.string "status", default: "assigned", null: false, comment: "The status of the membership request at any given point of time"
+    t.datetime "updated_at", null: false
+    t.index ["organization_id"], name: "index_membership_requests_on_organization_id"
+    t.index ["requestor_id"], name: "index_membership_requests_on_requestor_id"
+    t.index ["status", "organization_id", "requestor_id"], name: "index_membership_requests_on_status_and_association_ids", unique: true, where: "((status)::text = 'assigned'::text)"
+  end
+
   create_table "messages", force: :cascade do |t|
     t.datetime "created_at", null: false
     t.integer "detail_id", comment: "ID of the related object"
@@ -1139,7 +1293,7 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.string "appeals_type", null: false, comment: "Type of Appeal"
     t.datetime "created_at", comment: "Timestamp of when Noticiation was Created"
     t.boolean "email_enabled", default: true, null: false
-    t.text "email_notification_content", comment: "Full Email Text Content of Notification"
+    t.string "email_notification_content", comment: "Full Email Text Content of Notification"
     t.string "email_notification_external_id", comment: "VA Notify Notification Id for the email notification send through their API "
     t.string "email_notification_status", comment: "Status of the Email Notification"
     t.date "event_date", null: false, comment: "Date of Event"
@@ -1150,8 +1304,8 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.string "participant_id", comment: "ID of Participant"
     t.string "recipient_email", comment: "Participant's Email Address"
     t.string "recipient_phone_number", comment: "Participants Phone Number"
-    t.text "sms_notification_content", comment: "Full SMS Text Content of Notification"
-    t.string "sms_notification_external_id"
+    t.string "sms_notification_content", comment: "Full SMS Text Content of Notification"
+    t.string "sms_notification_external_id", comment: "VA Notify Notification Id for the sms notification send through their API "
     t.string "sms_notification_status", comment: "Status of SMS/Text Notification"
     t.datetime "updated_at", comment: "TImestamp of when Notification was Updated"
     t.index ["appeals_id", "appeals_type"], name: "index_appeals_notifications_on_appeals_id_and_appeals_type"
@@ -1215,6 +1369,20 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.integer "vacated_decision_issue_ids", comment: "When a motion to vacate is partially granted, this includes an array of the appeal's decision issue IDs that were chosen for vacatur in this post-decision motion. For full grant, this includes all prior decision issue IDs.", array: true
     t.index ["task_id"], name: "index_post_decision_motions_on_task_id"
     t.index ["updated_at"], name: "index_post_decision_motions_on_updated_at"
+  end
+
+  create_table "priority_end_product_sync_queue", comment: "Queue of End Product Establishments that need to sync with VBMS", force: :cascade do |t|
+    t.uuid "batch_id", comment: "A unique UUID for the batch the record is executed with"
+    t.datetime "created_at", null: false, comment: "Date and Time the record was inserted into the queue"
+    t.integer "end_product_establishment_id", null: false, comment: "ID of end_product_establishment record to be synced"
+    t.string "error_messages", default: [], comment: "Array of Error Message(s) containing Batch ID and specific error if a failure occurs", array: true
+    t.datetime "last_batched_at", comment: "Date and Time the record was last batched"
+    t.string "status", default: "NOT_PROCESSED", null: false, comment: "A status to indicate what state the record is in such as PROCESSING and PROCESSED"
+    t.datetime "updated_at", null: false, comment: "Date and Time the record was last updated."
+    t.index ["batch_id"], name: "index_priority_end_product_sync_queue_on_batch_id"
+    t.index ["end_product_establishment_id"], name: "index_priority_end_product_sync_queue_on_epe_id", unique: true
+    t.index ["last_batched_at"], name: "index_priority_ep_sync_queue_on_last_batched_at"
+    t.index ["status"], name: "index_priority_ep_sync_queue_on_status"
   end
 
   create_table "ramp_closed_appeals", id: :serial, comment: "Keeps track of legacy appeals that are closed or partially closed in VACOLS due to being transitioned to a RAMP election.  This data can be used to rollback the RAMP Election if needed.", force: :cascade do |t|
@@ -1555,6 +1723,7 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.string "cancellation_reason", comment: "Reason for latest cancellation status"
     t.integer "cancelled_by_id", comment: "ID of user that cancelled the task. Backfilled from versions table. Can be nil if task was cancelled before this column was added or if there is no user logged in when the task is cancelled"
     t.datetime "closed_at"
+    t.integer "completed_by_id", comment: "ID of user that marked task complete"
     t.datetime "created_at", null: false
     t.text "instructions", default: [], array: true
     t.integer "parent_id"
@@ -1663,6 +1832,68 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.index ["updated_at"], name: "index_users_on_updated_at"
   end
 
+  create_table "vbms_communication_packages", force: :cascade do |t|
+    t.string "comm_package_name", null: false
+    t.bigint "copies", default: 1
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id"
+    t.bigint "document_mailable_via_pacman_id"
+    t.string "document_mailable_via_pacman_type"
+    t.string "file_number", comment: "number associated with the documents."
+    t.string "status"
+    t.datetime "updated_at", null: false
+    t.bigint "updated_by_id"
+    t.string "uuid", comment: "UUID of the communication package in Package Manager (Pacman)"
+    t.index ["created_by_id"], name: "index_vbms_communication_packages_on_created_by_id"
+    t.index ["document_mailable_via_pacman_type", "document_mailable_via_pacman_id"], name: "index_vbms_communication_packages_on_pacman_document_id"
+    t.index ["updated_by_id"], name: "index_vbms_communication_packages_on_updated_by_id"
+  end
+
+  create_table "vbms_distribution_destinations", force: :cascade do |t|
+    t.string "address_line_1", comment: "PII. If destination_type is domestic, international, or military then Must not be null."
+    t.string "address_line_2", comment: "PII. If treatLine2AsAddressee is [true] then must not be null"
+    t.string "address_line_3", comment: "PII. If treatLine3AsAddressee is [true] then must not be null"
+    t.string "address_line_4", comment: "PII."
+    t.string "address_line_5", comment: "PII."
+    t.string "address_line_6", comment: "PII."
+    t.string "city", comment: "PII. If type is [domestic, international, military] then Must not be null"
+    t.string "country_code", comment: "Must be exactly two-letter ISO 3166 code."
+    t.string "country_name"
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id"
+    t.string "destination_type", null: false, comment: "Must be 'domesticAddress', 'internationalAddress', 'militaryAddress', 'derived', 'email', or 'sms'. Cannot be 'physicalAddress'."
+    t.string "postal_code"
+    t.string "state", comment: "PII. Must be exactly two-letter ISO 3166-2 code. If destination_type is domestic or military then Must not be null"
+    t.boolean "treat_line_2_as_addressee"
+    t.boolean "treat_line_3_as_addressee", comment: "If true, treatLine2AsAddressee must also be true"
+    t.datetime "updated_at", null: false
+    t.bigint "updated_by_id"
+    t.bigint "vbms_distribution_id"
+    t.index ["created_by_id"], name: "index_vbms_distribution_destinations_on_created_by_id"
+    t.index ["updated_by_id"], name: "index_vbms_distribution_destinations_on_updated_by_id"
+    t.index ["vbms_distribution_id"], name: "index_vbms_distribution_destinations_on_vbms_distribution_id"
+  end
+
+  create_table "vbms_distributions", force: :cascade do |t|
+    t.string "claimant_station_of_jurisdiction", comment: "Can't be null if [recipient_type] is ro-colocated."
+    t.datetime "created_at", null: false
+    t.bigint "created_by_id"
+    t.string "first_name", comment: "recipient's first name. If Type is [person] then it cant be null."
+    t.string "last_name", comment: "recipient's last name. If Type is [person] then it cant be null."
+    t.string "middle_name", comment: "recipient's middle name."
+    t.string "name", comment: "should only be used for non-person entity names. Not null if [recipient_type] is organization, ro-colocated, or System."
+    t.string "participant_id", comment: "recipient's participant id."
+    t.string "poa_code", comment: "Can't be null if [recipient_type] is ro-colocated. The recipients POA code"
+    t.string "recipient_type", null: false, comment: "Must be one of [person, organization, ro-colocated, System]."
+    t.datetime "updated_at", null: false
+    t.bigint "updated_by_id"
+    t.string "uuid", comment: "UUID of the distrubtion in Package Manager (Pacman)"
+    t.bigint "vbms_communication_package_id"
+    t.index ["created_by_id"], name: "index_vbms_distributions_on_created_by_id"
+    t.index ["updated_by_id"], name: "index_vbms_distributions_on_updated_by_id"
+    t.index ["vbms_communication_package_id"], name: "index_vbms_distributions_on_vbms_communication_package_id"
+  end
+
   create_table "vbms_uploaded_documents", force: :cascade do |t|
     t.bigint "appeal_id", comment: "Appeal/LegacyAppeal ID; use as FK to appeals/legacy_appeals"
     t.string "appeal_type", comment: "'Appeal' or 'LegacyAppeal'"
@@ -1670,8 +1901,10 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
     t.datetime "canceled_at", comment: "Timestamp when job was abandoned"
     t.datetime "created_at", null: false
     t.string "document_name"
+    t.string "document_series_reference_id", comment: "UUID that is provided by eFolder that represents the group of documentsthis document belongs to. Think of a series as a stack of versions."
     t.string "document_subject"
     t.string "document_type", null: false
+    t.string "document_version_reference_id", comment: "UUID that is provided by eFolder that represents the specific version of the document."
     t.string "error"
     t.datetime "last_submitted_at"
     t.datetime "processed_at"
@@ -1823,10 +2056,32 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
   add_foreign_key "board_grant_effectuations", "decision_documents"
   add_foreign_key "board_grant_effectuations", "decision_issues", column: "granted_decision_issue_id"
   add_foreign_key "board_grant_effectuations", "end_product_establishments"
+  add_foreign_key "cavc_dashboard_dispositions", "cavc_dashboards"
+  add_foreign_key "cavc_dashboard_dispositions", "users", column: "created_by_id", name: "cavc_dashboard_dispositions_created_by_id_fk"
+  add_foreign_key "cavc_dashboard_dispositions", "users", column: "updated_by_id", name: "cavc_dashboard_dispositions_updated_by_id_fk"
+  add_foreign_key "cavc_dashboard_issues", "cavc_dashboards"
+  add_foreign_key "cavc_dashboard_issues", "users", column: "created_by_id", name: "cavc_dashboard_issues_created_by_id_fk"
+  add_foreign_key "cavc_dashboard_issues", "users", column: "updated_by_id", name: "cavc_dashboard_issues_updated_by_id_fk"
+  add_foreign_key "cavc_dashboards", "cavc_remands"
+  add_foreign_key "cavc_dashboards", "users", column: "created_by_id", name: "cavc_dashboards_created_by_id_fk"
+  add_foreign_key "cavc_dashboards", "users", column: "updated_by_id", name: "cavc_dashboards_updated_by_id_fk"
+  add_foreign_key "cavc_decision_reasons", "cavc_decision_reasons", column: "parent_decision_reason_id"
+  add_foreign_key "cavc_dispositions_to_reasons", "cavc_dashboard_dispositions"
+  add_foreign_key "cavc_dispositions_to_reasons", "cavc_decision_reasons"
+  add_foreign_key "cavc_dispositions_to_reasons", "users", column: "created_by_id", name: "cavc_dispositions_to_reasons_created_by_id_fk"
+  add_foreign_key "cavc_dispositions_to_reasons", "users", column: "updated_by_id", name: "cavc_dispositions_to_reasons_updated_by_id_fk"
+  add_foreign_key "cavc_reasons_to_bases", "cavc_dispositions_to_reasons"
+  add_foreign_key "cavc_reasons_to_bases", "cavc_selection_bases"
+  add_foreign_key "cavc_reasons_to_bases", "users", column: "created_by_id", name: "cavc_reasons_to_bases_created_by_id_fk"
+  add_foreign_key "cavc_reasons_to_bases", "users", column: "updated_by_id", name: "cavc_reasons_to_bases_updated_by_id_fk"
   add_foreign_key "cavc_remands", "appeals", column: "remand_appeal_id"
   add_foreign_key "cavc_remands", "appeals", column: "source_appeal_id"
   add_foreign_key "cavc_remands", "users", column: "created_by_id"
   add_foreign_key "cavc_remands", "users", column: "updated_by_id"
+  add_foreign_key "cavc_remands_appellant_substitutions", "appellant_substitutions"
+  add_foreign_key "cavc_remands_appellant_substitutions", "cavc_remands"
+  add_foreign_key "cavc_remands_appellant_substitutions", "users", column: "created_by_id"
+  add_foreign_key "cavc_remands_appellant_substitutions", "users", column: "updated_by_id"
   add_foreign_key "certification_cancellations", "certifications"
   add_foreign_key "certifications", "users"
   add_foreign_key "claim_establishments", "dispatch_tasks", column: "task_id"
@@ -1877,6 +2132,9 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
   add_foreign_key "legacy_issue_optins", "legacy_issues"
   add_foreign_key "legacy_issue_optins", "request_issues"
   add_foreign_key "legacy_issues", "request_issues"
+  add_foreign_key "membership_requests", "organizations"
+  add_foreign_key "membership_requests", "users", column: "decider_id"
+  add_foreign_key "membership_requests", "users", column: "requestor_id"
   add_foreign_key "messages", "users"
   add_foreign_key "mpi_update_person_events", "api_keys"
   add_foreign_key "nod_date_updates", "appeals"
@@ -1887,6 +2145,8 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
   add_foreign_key "organizations_users", "users"
   add_foreign_key "post_decision_motions", "appeals"
   add_foreign_key "post_decision_motions", "tasks"
+  add_foreign_key "priority_end_product_sync_queue", "batch_processes", column: "batch_id", primary_key: "batch_id", name: "priority_end_product_sync_queue_batch_processes_id_fk"
+  add_foreign_key "priority_end_product_sync_queue", "end_product_establishments", name: "priority_end_product_sync_queue_end_product_establishment_id_fk"
   add_foreign_key "ramp_closed_appeals", "ramp_elections"
   add_foreign_key "ramp_election_rollbacks", "ramp_elections"
   add_foreign_key "ramp_election_rollbacks", "users"
@@ -1917,6 +2177,14 @@ ActiveRecord::Schema.define(version: 2022_12_15_202259) do
   add_foreign_key "unrecognized_appellants", "users", column: "created_by_id"
   add_foreign_key "user_quotas", "team_quotas"
   add_foreign_key "user_quotas", "users"
+  add_foreign_key "vbms_communication_packages", "users", column: "created_by_id"
+  add_foreign_key "vbms_communication_packages", "users", column: "updated_by_id"
+  add_foreign_key "vbms_distribution_destinations", "users", column: "created_by_id"
+  add_foreign_key "vbms_distribution_destinations", "users", column: "updated_by_id"
+  add_foreign_key "vbms_distribution_destinations", "vbms_distributions"
+  add_foreign_key "vbms_distributions", "users", column: "created_by_id"
+  add_foreign_key "vbms_distributions", "users", column: "updated_by_id"
+  add_foreign_key "vbms_distributions", "vbms_communication_packages"
   add_foreign_key "virtual_hearing_establishments", "virtual_hearings"
   add_foreign_key "virtual_hearings", "users", column: "created_by_id"
   add_foreign_key "virtual_hearings", "users", column: "updated_by_id"

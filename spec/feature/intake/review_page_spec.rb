@@ -174,7 +174,8 @@ feature "Intake Review Page", :postgres do
             :supplemental_claim,
             veteran_file_number: veteran.file_number,
             receipt_date: receipt_date,
-            legacy_opt_in_approved: false
+            legacy_opt_in_approved: false,
+            filed_by_va_gov: true
           )
         end
 
@@ -664,14 +665,15 @@ def check_pension_and_compensation_payee_code
     find("label", text: "Compensation", match: :prefer_exact).click
   end
 
-  fill_in "What is the Receipt Date of this form?", with: Time.zone.tomorrow.mdY
   find("label", text: "Blake Vance, Other", match: :prefer_exact).click
-  click_intake_continue
 
-  # check that other validation still works
-  expect(page).to have_content(
-    "Receipt date cannot be in the future."
-  )
+  # DateSelector component has been updated to not allow future dates to be selected at all
+  # fill_in "What is the Receipt Date of this form?", with: Time.zone.tomorrow.mdY
+  # click_intake_continue
+  # # check that other validation still works
+  # expect(page).to have_content(
+  #   "Receipt date cannot be in the future."
+  # )
 
   fill_in "What is the Receipt Date of this form?", with: Time.zone.today.mdY
 
