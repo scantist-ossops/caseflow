@@ -2,6 +2,8 @@
 
 # to create legacy appeals with MST/PACT issues, run "bundle exec rake 'db:generate_legacy_appeals[true]'""
 # to create without, run "bundle exec rake db:generate_legacy_appeals"
+
+# rubocop:disable all
 namespace :db do
   desc "Generates a smattering of legacy appeals with VACOLS cases that have special issues assocaited with them"
   task :generate_legacy_appeals, [:add_special_issues] => :environment do |_, args|
@@ -9,7 +11,6 @@ namespace :db do
     class LegacyAppealFactory
       class << self
         # Stamping out appeals like mufflers!
-        # rubocop:disable Layout/LineLength, Metrics/AbcSize, Metrics/MethodLength
         def stamp_out_legacy_appeals(num_appeals_to_create, file_number, user, docket_number)
           veteran = Veteran.find_by_file_number(file_number)
 
@@ -21,6 +22,7 @@ namespace :db do
             key = VACOLS::Folder.maximum(:ticknum).next
             Generators::Vacols::Case.create(
               corres_exists: true,
+              decass_creation: true,
               case_issue_attrs: [
                 Generators::Vacols::CaseIssue.case_issue_attrs.merge(ADD_SPECIAL_ISSUES ? special_issue_types(idx) : {}),
                 Generators::Vacols::CaseIssue.case_issue_attrs.merge(ADD_SPECIAL_ISSUES ? special_issue_types(idx) : {}),
@@ -51,7 +53,6 @@ namespace :db do
 
           build_the_cases_in_caseflow(cases)
         end
-        # rubocop:enable Layout/LineLength, Metrics/AbcSize, Metrics/MethodLength
 
         def custom_folder_attributes(veteran, docket_number)
           {
@@ -137,9 +138,8 @@ namespace :db do
         docket_number += 1
         LegacyAppealFactory.stamp_out_legacy_appeals(5, file_number, user, docket_number)
       end
-      # veterans_with_250_appeals.each do |file_number|
-      #   LegacyAppealFactory.stamp_out_legacy_appeals(250, file_number, user)
-      # end
+      # veterans_with_250_appeals.each { |file_number| LegacyAppealFactory.stamp_out_legacy_appeals(250, file_number, user) }
     end
   end
 end
+# rubocop:enable all
