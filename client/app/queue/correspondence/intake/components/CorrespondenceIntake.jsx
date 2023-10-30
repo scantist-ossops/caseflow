@@ -81,32 +81,33 @@ export const CorrespondenceIntake = () => {
     }
   ];
 
-  const correspondenceRowObjects = [
+  const corresRowObjects = (rows) => {
+    return rows.map((row, index) => {
+      const { checkbox, vaDor, sourceType, packageDocumentType, correspondenceType, notes } = row;
+
+      return {
+        checkbox: <Checkbox name={`${index + 1}`} hideLabel="true" />,
+        va_dor: vaDor || 'Null',
+        source_type: sourceType || 'Source Type Error',
+        package_document_type: packageDocumentType || 'Package Type Error',
+        correspondence_type: correspondenceType || 'Correspondence Type Error',
+        notes: notes || 'Notes Error'
+      };
+    });
+  };
+
+  const rows = [
     {
       checkbox: <Checkbox name="1" hideLabel="true" />,
-      va_dor: '09/14/2023' || 'Null',
-      source_type: <a href="https://www.google.com">Mail</a> || 'Source Type Error',
-      package_document_type: '10182' || 'Package Type Error',
-      correspondence_type: 'Evidence or argument' || 'Correspondence Type Error',
-      notes: 'This is an example of notes for correspondence' || 'Notes Error'
-    },
-    {
-      checkbox: <Checkbox name="2" hideLabel="true" />,
-      va_dor: '09/15/2023' || 'Null',
-      source_type: <a href="https://www.google.com">Mail</a> || 'Source Type Error',
-      package_document_type: '10182' || 'Package Type Error',
-      correspondence_type: 'Evidence or argument' || 'Correspondence Type Error',
-      notes: 'This is an example of notes for correspondence' || 'Notes Error'
-    },
-    {
-      checkbox: <Checkbox name="3" hideLabel="true" />,
-      va_dor: '09/16/2023' || 'Null',
-      source_type: <a href="https://www.google.com">Mail</a> || 'Source Type Error',
-      package_document_type: '10182' || 'Package Type Error',
-      correspondence_type: 'Evidence or argument' || 'Correspondence Type Error',
-      notes: 'This is an example of notes for correspondence' || 'Notes Error'
+      vaDor: '09/14/2023',
+      sourceType: <a href="https://www.google.com">Mail</a>,
+      packageDocumentType: '10182',
+      correspondenceType: 'Evidence or argument',
+      notes: 'This is an example of notes for correspondence'
     },
   ];
+
+  const correspondenceRowObjects = corresRowObjects(rows);
 
   return <div>
     <ProgressBar
