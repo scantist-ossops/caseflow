@@ -12,8 +12,10 @@
     "other_government_records": "Other government records"
   },
   "medicalExam": {
-    "medical_examinations": "Medical examinations",
-    "medical_opinions": "Medical opinions",
+    "no_medical_examinations": "No medical examinations",
+    "inadequate_medical_examinations": "Inadequate medical examinations",
+    "no_medical_opinions": "No medical opinions",
+    "inadequate_medical_opinions": "Inadequate medical opinions",
     "advisory_medical_opinion": "Advisory medical opinion"
   },
   "dueProcess": {
