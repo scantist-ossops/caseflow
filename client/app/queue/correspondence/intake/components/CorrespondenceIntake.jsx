@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
 import ProgressBar from 'app/components/ProgressBar';
 import Button from '../../../../components/Button';
+<<<<<<< HEAD
 
 import { AddTasksAppealsView } from './TasksAppeals/AddTasksAppealsView';
+=======
+import PropTypes from 'prop-types';
+import AddCorrespondenceView from './AddCorrespondence/AddCorrespondenceView';
+/* import { ReviewCorrespondenceView } from './ReviewCorrespondence/ReviewCorrespondenceView';
+import { ConfirmCorrespondenceView } from './ConfirmCorrespondence/ConfirmCorrespondenceView'; */
+>>>>>>> a0122ecb70940dc240af0ef746e95bd1c15fbccf
 
 const progressBarSections = [
   {
@@ -19,7 +26,14 @@ const progressBarSections = [
   },
 ];
 
+<<<<<<< HEAD
 export const CorrespondenceIntake = () => {
+=======
+export const CorrespondenceIntake = ( {correspondence_uuid} ) => {
+
+  //const { correspondence_uuid } = props.match.params;
+
+>>>>>>> a0122ecb70940dc240af0ef746e95bd1c15fbccf
   const [currentStep, setCurrentStep] = useState(1);
 
   const nextStep = () => {
@@ -44,11 +58,27 @@ export const CorrespondenceIntake = () => {
     <ProgressBar
       sections={sections}
       classNames={['cf-progress-bar', 'cf-']}
+<<<<<<< HEAD
       styling={{ style: { marginBottom: '5rem', float: 'right' } }}
     />
     {currentStep === 2 &&
       <AddTasksAppealsView />
     }
+=======
+      styling={{ style: { marginBottom: '5rem', float: 'right' } }} />
+    {currentStep === 1 &&
+      <AddCorrespondenceView
+        correspondence_uuid = {correspondence_uuid}
+      />
+    }
+    {/* currentStep === 2 &&
+      <ReviewCorrespondenceView />
+    }
+    {currentStep === 3 &&
+      <ConfirmCorrespondenceView />
+    */}
+
+>>>>>>> a0122ecb70940dc240af0ef746e95bd1c15fbccf
     <div>
       <a href="/queue/correspondence">
         <Button
@@ -85,4 +115,12 @@ export const CorrespondenceIntake = () => {
   </div>;
 };
 
+<<<<<<< HEAD
+=======
+CorrespondenceIntake.PropTypes = {
+  uuid: PropTypes.uuid,
+  correspondence_uuid: PropTypes.uuid
+};
+
+>>>>>>> a0122ecb70940dc240af0ef746e95bd1c15fbccf
 export default CorrespondenceIntake;
