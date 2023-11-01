@@ -13,4 +13,12 @@ class Correspondence < CaseflowRecord
 
   # has_many :correspondence_correspondences
   # has_many :related_correspondences, through: :correspondence_correspondences
+  def to_hash
+    {
+      uuid: uuid,
+      portal_entry_date: portal_entry_date,
+      source_type: source_type
+      # include other attributes as needed
+    }
+  end
 end

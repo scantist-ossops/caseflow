@@ -2,6 +2,7 @@
 
 FactoryBot.define do
   factory :correspondence do
+    uuid { SecureRandom.uuid }
     portal_entry_date { Time.zone.today }
     source_type { "dummy" }
     package_document_type_id { 1 }

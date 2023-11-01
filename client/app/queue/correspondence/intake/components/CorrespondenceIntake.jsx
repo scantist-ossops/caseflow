@@ -1,10 +1,8 @@
-
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import ProgressBar from 'app/components/ProgressBar';
 import Button from '../../../../components/Button';
-import Table from '../../../../components/Table';
-import Checkbox from '../../../../components/Checkbox';
-import RadioField from '../../../../components/RadioField';
+import PropTypes from 'prop-types';
+import AddCorrespondenceView from './AddCorrespondence/AddCorrespondenceView';
 
 const progressBarSections = [
   {
@@ -21,14 +19,8 @@ const progressBarSections = [
   },
 ];
 
-const priorMailAnswer = [
-  { displayText: 'Yes',
-    value: 'yes' },
-  { displayText: 'No',
-    value: 'no' }
-];
+export const CorrespondenceIntake = (props) => {
 
-export const CorrespondenceIntake = () => {
   const [currentStep, setCurrentStep] = useState(1);
 
   const nextStep = () => {
@@ -49,99 +41,23 @@ export const CorrespondenceIntake = () => {
   }),
   );
 
-  const [selectedValue, setSelectedValue] = useState('no');
-
-  const handleRadioChange = (event) => {
-    setSelectedValue(event);
-  };
-
-  const correspondenceColumns = [
-    {
-      valueName: 'checkbox'
-    },
-    {
-      header: <h3>VA DOR</h3>,
-      valueName: 'va_dor'
-    },
-    {
-      header: <h3>Source Type</h3>,
-      valueName: 'source_type'
-    },
-    {
-      header: <h3>Package Document Type</h3>,
-      valueName: 'package_document_type'
-    },
-    {
-      header: <h3>Correspondence Type</h3>,
-      valueName: 'correspondence_type'
-    },
-    {
-      header: <h3>Notes</h3>,
-      valueName: 'notes'
-    }
-  ];
-
-  const corresRowObjects = (rows) => {
-    return rows.map((row, index) => {
-      const { checkbox, vaDor, sourceType, packageDocumentType, correspondenceType, notes } = row;
-
-      return {
-        checkbox: <Checkbox name={`${index + 1}`} hideLabel="true" />,
-        va_dor: vaDor || 'Null',
-        source_type: sourceType || 'Source Type Error',
-        package_document_type: packageDocumentType || 'Package Type Error',
-        correspondence_type: correspondenceType || 'Correspondence Type Error',
-        notes: notes || 'Notes Error'
-      };
-    });
-  };
-
-  const rows = [
-    {
-      checkbox: <Checkbox name="1" hideLabel="true" />,
-      vaDor: '09/14/2023',
-      sourceType: <a href="https://www.google.com">Mail</a>,
-      packageDocumentType: '10182',
-      correspondenceType: 'Evidence or argument',
-      notes: 'This is an example of notes for correspondence'
-    },
-  ];
-
-  const correspondenceRowObjects = corresRowObjects(rows);
-
   return <div>
     <ProgressBar
       sections={sections}
       classNames={['cf-progress-bar', 'cf-']}
       styling={{ style: { marginBottom: '5rem', float: 'right' } }} />
     {currentStep === 1 &&
-        <div className="cf-app-segment cf-app-segment--alt">
-          <h1>Add Related Correspondence</h1>
-          <p>Add any related correspondence to the mail package that is in progress.</p>
-          <br></br>
-          <h2>Associate with prior Mail</h2>
-          <p>Is this correspondence related to prior mail?</p>
-          <RadioField
-            name=""
-            options={priorMailAnswer}
-            value={selectedValue}
-            onChange={handleRadioChange} />
-
-          {selectedValue === 'yes' && (
-            <div className="cf-app-segment cf-app-segment--alt">
-              <p>Please select the prior mail to link to this correspondence</p>
-              <p>Viewing 1-15 out of 200 total</p>
-              <Table
-                className="usa-table-borderless undefined"
-                columns={correspondenceColumns}
-                rowObjects={correspondenceRowObjects}
-                summary="Correspondence Information"
-                slowReRendersAreOk
-              />
-            </div>
-          )}
-        </div>
+      <AddCorrespondenceView
+        correspondenceUuid={props.correspondence_uuid}
+      />
     }
+    {/* currentStep === 2 &&
+      <ReviewCorrespondenceView />
+    }
+    {currentStep === 3 &&
+      <ConfirmCorrespondenceView />
+    */}
+
     <div>
       <a href="/queue/correspondence">
         <Button
@@ -151,31 +67,35 @@ export const CorrespondenceIntake = () => {
           classNames={['cf-btn-link', 'cf-left-side']} />
       </a>
       {currentStep < 3 &&
-      <Button
-        type="button"
-        onClick={nextStep}
-        name="continue"
-        classNames={['cf-right-side']}>
+        <Button
+          type="button"
+          onClick={nextStep}
+          name="continue"
+          classNames={['cf-right-side']}>
           Continue
-      </Button>}
+        </Button>}
       {currentStep === 3 &&
-      <Button
-        type="button"
-        name="Submit"
-        classNames={['cf-right-side']}>
+        <Button
+          type="button"
+          name="Submit"
+          classNames={['cf-right-side']}>
           Submit
-      </Button>}
+        </Button>}
       {currentStep > 1 &&
-      <Button
-        type="button"
-        onClick={prevStep}
-        name="back-button"
-        styling={{ style: { marginRight: '2rem' } }}
-        classNames={['usa-button-secondary', 'cf-right-side', 'usa-back-button']}>
+        <Button
+          type="button"
+          onClick={prevStep}
+          name="back-button"
+          styling={{ style: { marginRight: '2rem' } }}
+          classNames={['usa-button-secondary', 'cf-right-side', 'usa-back-button']}>
           Back
-      </Button>}
+        </Button>}
     </div>
   </div>;
+};
+
+CorrespondenceIntake.propTypes = {
+  correspondence_uuid: PropTypes.string.isRequired
 };
 
 export default CorrespondenceIntake;
