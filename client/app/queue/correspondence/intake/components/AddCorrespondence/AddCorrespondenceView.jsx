@@ -75,11 +75,15 @@ class AddCorrespondenceView extends React.Component {
             </span>
           </div>
         ),
-        valueFunction: () => (
-          <span className="va-dor-item">
-            <p>{correspondence.va_date_of_receipt}</p>
-          </span>
-        )
+        valueFunction: () => {
+          const date = new Date(correspondence.va_date_of_receipt);
+
+          return (
+            <span className="va-dor-item">
+              <p>{date.toLocaleDateString('en-US')}</p>
+            </span>
+          );
+        }
       },
       {
         cellClass: 'source-type-column',
