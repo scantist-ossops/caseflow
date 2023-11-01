@@ -1,12 +1,13 @@
 class CorrespondenceController < ApplicationController
   before_action :verify_feature_toggle
+  before_action :correspondence
 
   def intake
     respond_to do |format|
       format.html { return render "correspondence/intake" }
       format.json do
         render json: {
-          correspondence: correspondence_load
+          correspondences: correspondences
         }
       end
     end
@@ -20,18 +21,15 @@ class CorrespondenceController < ApplicationController
     end
   end
 
-  def correspondence_load
-    @correspondence ||= correspondence_by_uuid
-    vet = veteran_by_correspondence
-    @all_correspondence = Correspondence.where(veteran_id: vet.id)
+  def correspondence
+    @correspondence ||= Correspondence.find_by(uuid: params[:correspondence_uuid])
   end
 
-  def correspondence_by_uuid
-    Correspondence.find_by(uuid: params[:correspondence_uuid])
+  def correspondences
+    Correspondence.where(veteran_id: veteran_by_correspondence.id)
   end
 
   def veteran_by_correspondence
     Veteran.find(@correspondence.veteran_id)
   end
-
 end
