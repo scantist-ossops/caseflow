@@ -61,6 +61,51 @@ RSpec.feature "Duplicate Veteran Checker" do
 
   describe "run_remediation" do
     # TODO: Add test here
+
+    context "runs remediation" do
+      describe "checks for duplicate veterans by file number" do
+        it "aborts if more than one or none veterans have the duplicated number" do
+        end
+
+        it "aborts if veteran not found with file number" do
+        end
+      end
+
+      describe "checks for duplicate veterans by participant id or ssn" do
+        it "aborts if no duplicate veteran found" do
+        end
+
+        it "aborts if more than two duplicated veterans found" do
+        end
+
+        describe "when there is pair of duplicate veterans found" do
+          it "confirms first veteran in pair is indeed a duplicate and assigns second veteran to other_v variable" do
+            # I have now vet1 and vet2
+          end
+
+          it "aborts if both veterans have the same file_number or No file_number on the correct veteran" do
+          end
+
+          it "abort if neither veteran has a ssn and a ssn is needed to check the BGS file number" do
+          end
+
+          it "abort if veterans do not have the same ssn and a correct ssn needs to be chosen" do
+          end
+        end
+
+        it "sets duplicate veteran one as 'v'" do
+        end
+
+        it "sets duplicate veteran two as 'v2'" do
+        end
+
+        it "gets file number from BGS with veteran one ssn" do
+        end
+
+        it "aborts if file number from BGS does not match veteran two file number" do
+        end
+      end
+    end
   end
 
   describe "convert_file_number_to_legacy" do
