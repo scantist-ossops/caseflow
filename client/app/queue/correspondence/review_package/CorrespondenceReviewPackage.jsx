@@ -4,6 +4,8 @@ import ReviewPackageCmpInfo from './ReviewPackageCmpInfo';
 import ReviewPackageCaseTitle from './ReviewPackageCaseTitle';
 import Button from '../../../components/Button';
 import PropTypes from 'prop-types';
+import CorrespondencePage2 from '../pdfPreview/CorrespondencePdfDocument';
+import CorrespondencePdfUI from '../pdfPreview/CorrespondencePdfUI';
 
 export const CorrespondenceReviewPackage = (props) => {
 
@@ -14,6 +16,7 @@ export const CorrespondenceReviewPackage = (props) => {
       <AppSegment filledBackground>
         <ReviewPackageCaseTitle />
         <ReviewPackageCmpInfo {...props} />
+        <CorrespondencePdfUI />
       </AppSegment>
       <div className="cf-app-segment">
         <div className="cf-push-left">

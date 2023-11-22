@@ -59,10 +59,11 @@ export const CorrespondencePdfFile = ({
   windowingOverscan,
   ...props
 }) => {
+
   let loadingTask = null;
-  let pdfDocument = null;
+  let trackedPdfDocument = null;
   let grid = null;
-  let scrollTop = 0;
+  let trackedScrollTop = 0;
   let scrollLeft = 0;
   let scrollLocation = {};
   let clientHeight = 0;
@@ -70,90 +71,8 @@ export const CorrespondencePdfFile = ({
   let currentPage = 0;
   let columnCount = 1;
 
-  const getDocument = (requestOptions) => {
-    const logId = uuid.v4();
-
-    const documentData = {
-      documentId: documentId,
-      documentType: documentType,
-      file: file,
-      prefetchDisabled: featureToggles.prefetchDisabled
-    };
-
-    return ApiUtil.get(file, requestOptions).
-      then((resp) => {
-        const metricData = {
-          message: `Getting PDF document: "${file}"`,
-          type: 'performance',
-          product: 'reader',
-          data: documentData,
-        };
-
-        /* The feature toggle reader_get_document_logging adds the progress of the file being loaded in console */
-        if (featureToggles.readerGetDocumentLogging) {
-          const src = {
-            data: resp.body,
-            verbosity: 5,
-            stopAtErrors: false,
-            pdfBug: true,
-          };
-
-          this.loadingTask = PDFJS.getDocument(src);
-
-          this.loadingTask.onProgress = (progress) => {
-            // eslint-disable-next-line no-console
-            console.log(`UUID: ${logId} : Progress of ${file}: ${progress.loaded} / ${progress.total}`);
-          };
-        } else {
-          this.loadingTask = PDFJS.getDocument({ data: resp.body });
-        }
-
-        return recordAsyncMetrics(this.loadingTask.promise, metricData,
-          featureToggles.metricsRecordPDFJSGetDocument);
-
-      }, (reason) => this.onRejected(reason, 'getDocument')).
-      then((pdfDocument) => {
-        this.pdfDocument = pdfDocument;
-
-        return this.getPages(pdfDocument);
-      }, (reason) => this.onRejected(reason, 'getPages')).
-      then((pages) => this.setPageDimensions(pages)
-        , (reason) => this.onRejected(reason, 'setPageDimensions')).
-      then(() => {
-        if (this.loadingTask.destroyed) {
-          return this.pdfDocument.destroy();
-        }
-        this.loadingTask = null;
-
-        return setPdfDocument(file, this.pdfDocument);
-      }, (reason) => this.onRejected(reason, 'setPdfDocument')).
-      catch((error) => {
-        const message = `UUID: ${logId} : Getting PDF document failed for ${file} : ${error}`;
-
-        console.error(message);
-
-        if (featureToggles.metricsRecordPDFJSGetDocument) {
-          storeMetrics(
-            logId,
-            documentData,
-            { message,
-              type: 'error',
-              product: 'browser',
-              prefetchDisabled: featureToggles.prefetchDisabled
-            }
-          );
-        }
-
-        this.loadingTask = null;
-        setDocumentLoadError(file);
-      });
-  }
-
   const onRejected = (reason, step) => {
-    const documentId = documentId,
-      documentType = documentType,
-      file = file,
-      logId = uuid.v4();
+    const logId = uuid.v4();
 
     console.error(`${logId} : GET ${file} : STEP ${step} : ${reason}`);
 
@@ -194,6 +113,85 @@ export const CorrespondencePdfFile = ({
     setPageDimensions(file, viewports);
   }
 
+  const getDocument = (requestOptions) => {
+    const logId = uuid.v4();
+
+    const documentData = {
+      documentId: documentId,
+      documentType: documentType,
+      file: file,
+      prefetchDisabled: featureToggles.prefetchDisabled
+    };
+
+    return ApiUtil.get(file, requestOptions).
+      then((resp) => {
+        const metricData = {
+          message: `Getting PDF document: "${file}"`,
+          type: 'performance',
+          product: 'reader',
+          data: documentData,
+        };
+
+        /* The feature toggle reader_get_document_logging adds the progress of the file being loaded in console */
+        if (featureToggles.readerGetDocumentLogging) {
+          const src = {
+            data: resp.body,
+            verbosity: 5,
+            stopAtErrors: false,
+            pdfBug: true,
+          };
+
+          loadingTask = PDFJS.getDocument(src);
+
+          loadingTask.onProgress = (progress) => {
+            // eslint-disable-next-line no-console
+            console.log(`UUID: ${logId} : Progress of ${file}: ${progress.loaded} / ${progress.total}`);
+          };
+        } else {
+          loadingTask = PDFJS.getDocument({ data: resp.body });
+        }
+
+        return recordAsyncMetrics(loadingTask.promise, metricData,
+          featureToggles.metricsRecordPDFJSGetDocument);
+
+      }, (reason) => onRejected(reason, 'getDocument')).
+      then((pdfDocument) => {
+        trackedPdfDocument = pdfDocument;
+
+        return getPages(pdfDocument);
+      }, (reason) => onRejected(reason, 'getPages')).
+      then((pages) => setPageDimensions(pages)
+        , (reason) => onRejected(reason, 'setPageDimensions')).
+      then(() => {
+        if (loadingTask.destroyed) {
+          return trackedPdfDocument.destroy();
+        }
+        loadingTask = null;
+
+        return setPdfDocument(file, trackedPdfDocument);
+      }, (reason) => onRejected(reason, 'setPdfDocument')).
+      catch((error) => {
+        const message = `UUID: ${logId} : Getting PDF document failed for ${file} : ${error}`;
+
+        console.error(message);
+
+        if (featureToggles.metricsRecordPDFJSGetDocument) {
+          storeMetrics(
+            logId,
+            documentData,
+            { message,
+              type: 'error',
+              product: 'browser',
+              prefetchDisabled: featureToggles.prefetchDisabled
+            }
+          );
+        }
+
+        this.loadingTask = null;
+        setDocumentLoadError(file);
+      });
+  }
+
   componentDidMount = () => {
 
     let requestOptions = {
@@ -222,13 +220,13 @@ export const CorrespondencePdfFile = ({
     if (this.loadingTask) {
       this.loadingTask.destroy();
     }
-    if (this.pdfDocument) {
-      this.pdfDocument.destroy();
-      clearPdfDocument(file, this.pdfDocument);
+    if (trackedPdfDocument) {
+      trackedPdfDocument.destroy();
+      clearPdfDocument(file, trackedPdfDocument);
     }
   }
 
-  getPage = ({ rowIndex, columnIndex, style, isVisible }) => {
+  const getPage = ({ rowIndex, columnIndex, style, isVisible }) => {
     const pageIndex = (this.columnCount * rowIndex) + columnIndex;
 
     if (pageIndex >= pdfDocument.numPages) {
@@ -236,7 +234,7 @@ export const CorrespondencePdfFile = ({
     }
 
     return <div key={pageIndex} style={style}>
-      <PdfPage
+      {/* <PdfPage
         documentId={documentId}
         file={file}
         isPageVisible={isVisible}
@@ -245,31 +243,31 @@ export const CorrespondencePdfFile = ({
         scale={scale}
         pdfDocument={pdfDocument}
         featureToggles={featureToggles}
-      />
+      /> */}
     </div>;
   }
 
-  pageDimensions = (index) => _.get(pageDimensions, [file, index])
+  const appliedPageDimensions = (index) => _.get(pageDimensions, [file, index])
 
-  isHorizontal = () => rotation === 90 || rotation === 270;
+  const isHorizontal = () => rotation === 90 || rotation === 270;
 
-  pageHeight = (index) => {
+  const pageHeight = (index) => {
     if (this.isHorizontal()) {
-      return _.get(this.pageDimensions(index), ['width'], PDF_PAGE_WIDTH);
+      return _.get(appliedPageDimensions(index), ['width'], PDF_PAGE_WIDTH);
     }
 
-    return _.get(this.pageDimensions(index), ['height'], PDF_PAGE_HEIGHT);
+    return _.get(appliedPageDimensions(index), ['height'], PDF_PAGE_HEIGHT);
   }
 
-  pageWidth = (index) => {
+  const pageWidth = (index) => {
     if (this.isHorizontal()) {
-      return _.get(this.pageDimensions(index), ['height'], PDF_PAGE_HEIGHT);
+      return _.get(appliedPageDimensions(index), ['height'], PDF_PAGE_HEIGHT);
     }
 
-    return _.get(this.pageDimensions(index), ['width'], PDF_PAGE_WIDTH);
+    return _.get(appliedPageDimensions(index), ['width'], PDF_PAGE_WIDTH);
   }
 
-  getRowHeight = ({ index }) => {
+  const getRowHeight = ({ index }) => {
     const pageIndexStart = index * this.columnCount;
     const pageHeights = _.range(pageIndexStart, pageIndexStart + this.columnCount).
       map((pageIndex) => this.pageHeight(pageIndex));
@@ -277,14 +275,14 @@ export const CorrespondencePdfFile = ({
     return (Math.max(...pageHeights) + PAGE_MARGIN) * scale;
   }
 
-  getColumnWidth = () => {
+  const getColumnWidth = () => {
     const maxPageWidth = _.range(0, pdfDocument.numPages).
       reduce((maxWidth, pageIndex) => Math.max(this.pageWidth(pageIndex), maxWidth), 0);
 
     return (maxPageWidth + PAGE_MARGIN) * scale;
   }
 
-  getGrid = (grid) => {
+  const getGrid = (grid) => {
     this.grid = grid;
 
     if (this.grid) {
@@ -292,17 +290,17 @@ export const CorrespondencePdfFile = ({
     }
   }
 
-  pageRowAndColumn = (pageIndex) => ({
+  const pageRowAndColumn = (pageIndex) => ({
     rowIndex: Math.floor(pageIndex / this.columnCount),
     columnIndex: pageIndex % this.columnCount
   })
 
-  getOffsetForPageIndex = (pageIndex, alignment = 'start') => this.grid.getOffsetForCell({
+  const getOffsetForPageIndex = (pageIndex, alignment = 'start') => this.grid.getOffsetForCell({
     alignment,
     ...this.pageRowAndColumn(pageIndex)
   })
 
-  scrollToPosition = (pageIndex, locationOnPage = 0) => {
+  const scrollToPosition = (pageIndex, locationOnPage = 0) => {
     const position = this.getOffsetForPageIndex(pageIndex);
 
     this.grid.scrollToPosition({
@@ -311,7 +309,7 @@ export const CorrespondencePdfFile = ({
     });
   }
 
-  jumpToPage = () => {
+  const jumpToPage = () => {
     // We want to jump to the page, after the react virtualized has initialized the scroll window.
     if (jumpToPageNumber && this.clientHeight > 0) {
       const scrollToIndex = jumpToPageNumber ? pageIndexOfPageNumber(jumpToPageNumber) : -1;
@@ -321,12 +319,12 @@ export const CorrespondencePdfFile = ({
     }
   }
 
-  jumpToComment = () => {
+  const jumpToComment = () => {
     // We want to jump to the comment, after the react virtualized has initialized the scroll window.
     if (scrollToComment && this.clientHeight > 0) {
       const pageIndex = pageIndexOfPageNumber(scrollToComment.page);
       const transformedY = rotateCoordinates(scrollToComment,
-        this.pageDimensions(pageIndex), - rotation).y * scale;
+        appliedPageDimensions(pageIndex), - rotation).y * scale;
       const scrollToY = (transformedY - (this.pageHeight(pageIndex) / 2)) / scale;
 
       this.scrollToPosition(pageIndex, scrollToY);
@@ -334,19 +332,19 @@ export const CorrespondencePdfFile = ({
     }
   }
 
-  scrollWhenFinishedZooming = () => {
+  const scrollWhenFinishedZooming = () => {
     if (this.scrollLocation.page) {
       this.scrollToPosition(this.scrollLocation.page, this.scrollLocation.locationOnPage);
       this.scrollLocation = {};
     }
   }
 
-  scrollToScrollTop = (pageIndex, locationOnPage = scrollTop) => {
+  const scrollToScrollTop = (pageIndex, locationOnPage = scrollTop) => {
     this.scrollToPosition(pageIndex, locationOnPage);
     setDocScrollPosition(null);
   }
 
-  getPageIndexofMatch = (matchIndex = currentMatchIndex) => {
+  const getPageIndexofMatch = (matchIndex = currentMatchIndex) => {
     // get page, relative index of match at absolute index
     let cumulativeMatches = 0;
 
@@ -367,7 +365,7 @@ export const CorrespondencePdfFile = ({
     };
   }
 
-  scrollToSearchTerm = (prevProps) => {
+  const scrollToSearchTerm = (prevProps) => {
     const { pageIndex, relativeIndex } = this.getPageIndexofMatch();
 
     if (pageIndex === -1) {
@@ -398,7 +396,7 @@ export const CorrespondencePdfFile = ({
       // Set the scroll location based on the current page and where you
       // are on that page scaled by the zoom factor.
       const zoomFactor = scale / prevProps.scale;
-      const nonZoomedLocation = (this.scrollTop - this.getOffsetForPageIndex(this.currentPage).scrollTop);
+      const nonZoomedLocation = (trackedScrollTop - this.getOffsetForPageIndex(this.currentPage).scrollTop);
 
       this.scrollLocation = {
         page: this.currentPage,
@@ -429,13 +427,13 @@ export const CorrespondencePdfFile = ({
     }
   }
 
-  onPageChange = (index, clientHeight) => {
+  const updateCurrentPageOnPageChange = (index, height) => {
     this.currentPage = index;
-    onPageChange(pageNumberOfPageIndex(index), clientHeight / this.pageHeight(index));
+    onPageChange(pageNumberOfPageIndex(index), height / this.pageHeight(index));
   }
 
-  onScroll = ({ clientHeight, scrollTop, scrollLeft }) => {
-    this.scrollTop = scrollTop;
+  const onScroll = ({ clientHeight, scrollTop, scrollLeft }) => {
+    trackedScrollTop = scrollTop;
     this.scrollLeft = scrollLeft;
 
     if (this.grid) {
@@ -452,11 +450,11 @@ export const CorrespondencePdfFile = ({
         }
       });
 
-      this.onPageChange(minIndex, clientHeight);
+      updateCurrentPageOnPageChange(minIndex, clientHeight);
     }
   }
 
-  getCenterOfVisiblePage = (scrollWindowBoundary, pageScrollBoundary, pageDimension, clientDimension) => {
+  const getCenterOfVisiblePage = (scrollWindowBoundary, pageScrollBoundary, pageDimension, clientDimension) => {
     const scrolledLocationOnPage = (scrollWindowBoundary - pageScrollBoundary) / scale;
     const adjustedScrolledLocationOnPage = scrolledLocationOnPage ? scrolledLocationOnPage : scrolledLocationOnPage / 2;
 
@@ -467,7 +465,7 @@ export const CorrespondencePdfFile = ({
     return Math.min(positionBasedOnPageDimension, positionBasedOnClientDimension);
   }
 
-  handlePageUpDown = (event) => {
+  const handlePageUpDown = (event) => {
     if (this.grid && (event.code === 'PageDown' || event.code === 'PageUp')) {
       const { rowIndex, columnIndex } = this.pageRowAndColumn(this.currentPage);
 
@@ -480,7 +478,7 @@ export const CorrespondencePdfFile = ({
     }
   }
 
-  keyListener = (event) => {
+  const keyListener = (event) => {
     if (isUserEditingText() || !isVisible) {
       return;
     }
@@ -494,7 +492,7 @@ export const CorrespondencePdfFile = ({
     }
   }
 
-  displayErrorMessage = () => {
+  const displayErrorMessage = () => {
     if (!isVisible) {
       return;
     }
@@ -519,70 +517,67 @@ export const CorrespondencePdfFile = ({
     </div>;
   }
 
-  overscanIndicesGetter = ({ cellCount, overscanCellsCount, startIndex, stopIndex }) => ({
+  const overscanIndicesGetter = ({ cellCount, overscanCellsCount, startIndex, stopIndex }) => ({
     overscanStartIndex: Math.max(0, startIndex - Math.ceil(overscanCellsCount / 2)),
     overscanStopIndex: Math.min(cellCount - 1, stopIndex + Math.ceil(overscanCellsCount / 2))
   })
 
-  render() {
-    if (loadError) {
-      return <div>{this.displayErrorMessage()}</div>;
-    }
-
-    // Consider the following scenario: A user loads PDF 1, they then move to PDF 3 and
-    // PDF 1 is unloaded, the pdfDocument object is cleaned up. However, before the Redux
-    // state is nulled out the user moves back to PDF 1. We still can access the old destroyed
-    // pdfDocument in the Redux state. So we must check that the transport is not destroyed
-    // before trying to render the page.
-    // eslint-disable-next-line no-underscore-dangle
-    if (pdfDocument && !pdfDocument._transport.destroyed) {
-      return <AutoSizer>{
-        ({ width, height }) => {
-          if (this.clientHeight !== height) {
-            _.defer(this.onPageChange, this.currentPage, height);
-            this.clientHeight = height;
-          }
-          if (this.clientWidth !== width) {
-            this.clientWidth = width;
-          }
-
-          this.columnCount = Math.min(Math.max(Math.floor(width / this.getColumnWidth()), 1),
-            pdfDocument.numPages);
-
-          let visibility = isVisible ? 'visible' : 'hidden';
-
-          return <Grid
-            ref={this.getGrid}
-            containerStyle={{
-              visibility: `${visibility}`,
-              margin: '0 auto',
-              marginBottom: `-${PAGE_MARGIN}px`
-            }}
-            overscanIndicesGetter={this.overscanIndicesGetter}
-            estimatedRowSize={
-              (this.pageHeight(0) + PAGE_MARGIN) * scale
-            }
-            overscanRowCount={Math.floor(windowingOverscan / this.columnCount)}
-            onScroll={this.onScroll}
-            height={height}
-            rowCount={Math.ceil(pdfDocument.numPages / this.columnCount)}
-            rowHeight={this.getRowHeight}
-            cellRenderer={this.getPage}
-            scrollToAlignment="start"
-            width={width}
-            columnWidth={this.getColumnWidth}
-            columnCount={this.columnCount}
-            scale={scale}
-            tabIndex={isVisible ? 0 : -1}
-          />;
-        }
-      }
-      </AutoSizer>;
-    }
-
-    return null;
+  if (loadError) {
+    return <div>{this.displayErrorMessage()}</div>;
   }
-}
+
+  // Consider the following scenario: A user loads PDF 1, they then move to PDF 3 and
+  // PDF 1 is unloaded, the pdfDocument object is cleaned up. However, before the Redux
+  // state is nulled out the user moves back to PDF 1. We still can access the old destroyed
+  // pdfDocument in the Redux state. So we must check that the transport is not destroyed
+  // before trying to render the page.
+  // eslint-disable-next-line no-underscore-dangle
+  if (pdfDocument && !pdfDocument._transport.destroyed) {
+    return <AutoSizer>{
+      ({ width, height }) => {
+        if (this.clientHeight !== height) {
+          _.defer(updateCurrentPageOnPageChange, this.currentPage, height);
+          this.clientHeight = height;
+        }
+        if (this.clientWidth !== width) {
+          this.clientWidth = width;
+        }
+        this.columnCount = Math.min(Math.max(Math.floor(width / this.getColumnWidth()), 1),
+          pdfDocument.numPages);
+        const visibility = isVisible ? 'visible' : 'hidden';
+
+        return <Grid
+          ref={this.getGrid}
+          containerStyle={{
+            visibility: `${visibility}`,
+            margin: '0 auto',
+            marginBottom: `-${PAGE_MARGIN}px`
+          }}
+          overscanIndicesGetter={this.overscanIndicesGetter}
+          estimatedRowSize={
+            (this.pageHeight(0) + PAGE_MARGIN) * scale
+          }
+          overscanRowCount={Math.floor(windowingOverscan / this.columnCount)}
+          onScroll={this.onScroll}
+          height={height}
+          rowCount={Math.ceil(pdfDocument.numPages / this.columnCount)}
+          rowHeight={this.getRowHeight}
+          cellRenderer={this.getPage}
+          scrollToAlignment="start"
+          width={width}
+          columnWidth={this.getColumnWidth}
+          columnCount={this.columnCount}
+          scale={scale}
+          tabIndex={isVisible ? 0 : -1}
+        />;
+      }
+    }
+    </AutoSizer>;
+  }
+
+  return null;
+};
+
 
 CorrespondencePdfFile.propTypes = {
   _transport: PropTypes.object,

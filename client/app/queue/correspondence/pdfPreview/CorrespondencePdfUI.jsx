@@ -12,7 +12,7 @@ import classNames from 'classnames';
 import { ExternalLinkIcon } from '../../../components/icons/ExternalLinkIcon';
 import DocumentSearch from '../../../reader/DocumentSearch';
 import _, { get, has, map, size, sortBy } from 'lodash';
-import CorrespondencePage2 from './CorrespondencePage2';
+import CorrespondencePage2 from './CorrespondencePdfDocument';
 import { categoryFieldNameOfCategoryName } from '../../../reader/utils';
 
 const CorrespondencePdfUI = () => {

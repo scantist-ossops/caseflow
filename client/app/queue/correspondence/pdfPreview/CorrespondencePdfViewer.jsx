@@ -12,6 +12,7 @@ import { selectCurrentPdf } from '../../../reader/Documents/DocumentsActions';
 import { shouldFetchAppeal } from '../../../reader/utils';
 import { bindActionCreators } from 'redux';
 import { getFilteredDocuments } from '../../../reader/selectors';
+import Pdf from '../../../reader/Pdf';
 
 export const CorrespondencePdfViewer = ({
   handleSelectCurrentPdf,
@@ -48,17 +49,12 @@ export const CorrespondencePdfViewer = ({
       fetchAppealDetails(match.params.vacolsId);
     }
 
-  }, [appeal, match]);
+  }, [appeal, match.params.vacolsId]);
 
-  /* eslint-disable camelcase */
-  // componentDidUpdate = (prevProps) => {
-  //   const nextDocId = Number(match.params.docId);
-  //   const prevDocId = Number(prevProps.match.params.docId);
+  useEffect(() => {
+    handleSelectCurrentPdf(Number(match.params.docId));
+  }, [match.params.docId]);
 
-  //   if (nextDocId !== prevDocId) {
-  //     handleSelectCurrentPdf(nextDocId);
-  //   }
-  // }
   /* eslint-enable camelcase */
 
   // If we don't have a currently selected document, we
@@ -74,7 +70,7 @@ export const CorrespondencePdfViewer = ({
   return (
     <div>
       <div className="cf-pdf-page-container">
-        <PdfUI
+        {/* <PdfUI
           doc={doc}
           prefetchFiles={getPrefetchFiles()}
           id="pdf"
@@ -85,7 +81,7 @@ export const CorrespondencePdfViewer = ({
           showPdf={props.showPdf}
           showClaimsFolderNavigation={showClaimsFolderNavigation()}
           featureToggles={featureToggles}
-        />
+        /> */}
       </div>
       {doc.wasUpdated}
     </div>
