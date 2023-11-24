@@ -1,20 +1,23 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import PropTypes from 'prop-types';
-import Button from '../../../components/Button';
-import { FitToScreenIcon } from '../../../components/icons/FitToScreenIcon';
-import { RotateIcon } from '../../../components/icons/RotateIcon';
-import { DownloadIcon } from '../../../components/icons/DownloadIcon';
-import { SearchIcon } from '../../../components/icons/SearchIcon';
-import * as Constants from '../../../reader/constants';
-import Link from '../../../components/Link';
+import * as pdfjs from 'pdfjs-dist';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.entry';
 import { css } from 'glamor';
 import classNames from 'classnames';
-import { ExternalLinkIcon } from '../../../components/icons/ExternalLinkIcon';
-import DocumentSearch from '../../../reader/DocumentSearch';
-import _, { get, has, map, size, sortBy } from 'lodash';
-import CorrespondencePage2 from './CorrespondencePdfDocument';
-import { categoryFieldNameOfCategoryName } from '../../../reader/utils';
+import _ from 'lodash';
+import CorrespondencePdfDocument from './CorrespondencePdfDocument';
+import CorrespondencePdfToolBar from './CorrespondencePdfToolBar';
+import ApiUtil from '../../../util/ApiUtil';
+import { pageNumberOfPageIndex } from '../../../reader/utils';
+import { PDF_PAGE_HEIGHT, PDF_PAGE_WIDTH } from '../../../reader/constants';
 
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
+/**
+ * Represents the root layout and component structure for viewing PDF files
+ * @param {Object} doc - Document metadata obtained from Document Controller
+ * @param {string} documentPathBase - String path containing appeal Id. Directs to /:appeal_id/documents
+ */
 const CorrespondencePdfUI = () => {
   // Destructured Props and State
   // const {
@@ -51,8 +54,46 @@ const CorrespondencePdfUI = () => {
     wasUpdated: false
   };
 
+  const [viewport, setViewPort] = useState({
+    height: PDF_PAGE_HEIGHT,
+    width: PDF_PAGE_WIDTH
+  });
   const [scale, setScale] = useState(1);
+  const [rotation, setRotation] = useState(0);
   const [searchBarToggle, setSearchBarToggle] = useState(false);
+  const [pdfDocProxy, setPdfDocProxy] = useState(null);
+  const [pdfPageProxies, setPdfPageProxies] = useState(null);
+
+  useEffect(() => {
+    const getAllPages = (pdfDocument) => {
+      const promises = _.range(0, pdfDocument?.numPages).map((index) => {
+
+        return pdfDocument.getPage(pageNumberOfPageIndex(index));
+      });
+
+      return Promise.all(promises);
+    };
+
+    const loadPdf = async () => {
+
+      const response = await ApiUtil.get(`${doc.content_url}`, {
+        cache: true,
+        withCredentials: true,
+        timeout: true,
+        responseType: 'arraybuffer',
+      });
+
+      const loadingTask = pdfjs.getDocument({ data: response.body });
+      const pdfDocument = await loadingTask.promise;
+
+      const pages = await getAllPages(pdfDocument);
+
+      setPdfDocProxy(pdfDocument);
+      setPdfPageProxies(pages);
+    };
+
+    loadPdf();
+  }, []);
 
   // Constants
   const ZOOM_RATE = 0.3;
@@ -60,42 +101,6 @@ const CorrespondencePdfUI = () => {
 
   const ROTATION_INCREMENTS = 90;
   const COMPLETE_ROTATION = 360;
-
-  // In-Line CSS Styles
-  // PDF Document Viewer is 800px wide or less.
-  const pdfWrapperSmall = 1165;
-
-  const pdfToolbarStyles = {
-    openSidebarMenu: css({ marginRight: '2%' }),
-    toolbar: css({ width: '33%' }),
-    toolbarLeft: css({
-      '&&': { [`@media(max-width:${pdfWrapperSmall}px)`]: {
-        width: '18%' }
-      }
-    }),
-    toolbarCenter: css({
-      '&&': { [`@media(max-width:${pdfWrapperSmall}px)`]: {
-        width: '24%' }
-      }
-    }),
-    toolbarRight: css({
-      textAlign: 'right',
-      '&&': { [`@media(max-width:${pdfWrapperSmall}px)`]: {
-        width: '44%',
-        '& .cf-pdf-button-text': { display: 'none' } }
-      }
-    }),
-    footer: css({
-      position: 'absolute',
-      bottom: 0,
-      display: 'flex',
-      alignItems: 'center',
-      '&&': { [`@media(max-width:${pdfWrapperSmall}px)`]: {
-        '& .left-button-label': { display: 'none' },
-        '& .right-button-label': { display: 'none' }
-      } }
-    })
-  };
 
   const pdfUiClass = classNames(
     'cf-pdf-container');
@@ -133,6 +138,7 @@ const CorrespondencePdfUI = () => {
 
   // Rotations
   const handleDocumentRotation = (docId) => {
+    setRotation((prev) => (prev + 90) % 360);
     console.log('hi');
   };
 
@@ -141,88 +147,27 @@ const CorrespondencePdfUI = () => {
     setSearchBarToggle(!searchBarToggle);
   };
 
-  // Downlaod
-
-  const openDownloadLink = () => {
-    window.open(`${doc.content_url}?type=${doc.type}&download=true`);
-  }
-
   return (
     <div className={pdfUiClass} {...pdfWrapper}>
-      <div className="cf-pdf-header cf-pdf-toolbar">
-        <span {...pdfToolbarStyles.toolbar} {...pdfToolbarStyles.toolbarCenter}>
-          <span className="category-icons-and-doc-type">
-            <span className="cf-pdf-doc-category-icons">
-              <CorrespondenceDocumentCategoryIcons doc={doc} />
-            </span>
-            <span className="cf-pdf-doc-type-button-container">
-              <Link
-                name="newTab"
-                ariaLabel="open document in new tab"
-                target="_blank"
-                button="matte"
-                href={`/reader/appeal${documentPathBase}/${doc.id}`}>
-                <h1 className="cf-pdf-vertically-center cf-non-stylized-header">
-                  <span title="Open in new tab">{doc.type}</span>
-                  <span className="cf-pdf-external-link-icon"><ExternalLinkIcon /></span>
-                </h1>
-              </Link>
-            </span>
-          </span>
-        </span>
-        <span {...pdfToolbarStyles.toolbar} {...pdfToolbarStyles.toolbarRight}>
-          <span className="cf-pdf-button-text">Zoom:</span>
-          <Button
-            name="zoomOut"
-            classNames={['cf-pdf-button cf-pdf-spaced-buttons']}
-            onClick={zoomOut}
-            ariaLabel="zoom out">
-            <i className="fa fa-minus" aria-hidden="true" />
-          </Button>
-          <Button
-            name="zoomIn"
-            classNames={['cf-pdf-button cf-pdf-spaced-buttons']}
-            onClick={zoomIn}
-            ariaLabel="zoom in">
-            <i className="fa fa-plus" aria-hidden="true" />
-          </Button>
-          <Button
-            name="fit"
-            classNames={['cf-pdf-button cf-pdf-spaced-buttons']}
-            onClick={fitToScreen}
-            ariaLabel="fit to screen">
-            <FitToScreenIcon />
-          </Button>
-          <Button
-            name="rotation"
-            classNames={['cf-pdf-button cf-pdf-spaced-buttons']}
-            onClick={handleDocumentRotation}
-            ariaLabel="rotate document">
-            <RotateIcon />
-          </Button>
-          <span className="cf-pdf-spaced-buttons">|</span>
-          <Button
-            name="download"
-            classNames={['cf-pdf-button cf-pdf-download-icon']}
-            onClick={openDownloadLink}
-            ariaLabel="download pdf">
-            <DownloadIcon />
-          </Button>
-          <Button
-            name="search"
-            classNames={['cf-pdf-button cf-pdf-search usa-search usa-search-small']}
-            ariaLabel="search text"
-            type="submit"
-            onClick={handleSearchBarToggle}>
-            <SearchIcon />
-          </Button>
-        </span>
-      </div>
-
+      <CorrespondencePdfToolBar
+        doc={doc}
+        documentPathBase={documentPathBase}
+        zoomIn={zoomIn}
+        zoomOut={zoomOut}
+        fitToScreen={fitToScreen}
+        handleDocumentRotation={handleDocumentRotation}
+        handleSearchBarToggle={handleSearchBarToggle} />
       <div>
-        <CorrespondencePage2
-          scale={scale}
-        />
+        {pdfDocProxy &&
+          <CorrespondencePdfDocument
+            pdfDocProxy={pdfDocProxy}
+            scale={scale}
+            isVisible
+            viewport={viewport}
+            setViewPort={setViewPort}
+          />
+        }
+
         {/* <DocumentSearch file={this.props.doc.content_url} featureToggles={this.props.featureToggles} />
         <Pdf
           documentId={this.props.doc.id}
@@ -243,50 +188,6 @@ const CorrespondencePdfUI = () => {
       {/* { this.getPdfFooter() } */}
     </div>
   );
-};
-
-const CorrespondenceDocumentCategoryIcons = ({ doc }) => {
-
-  // Helper function
-  const categoriesOfDocument = (document) =>
-    sortBy(
-      Object.keys(Constants.documentCategories).reduce((list, name) => {
-        if (document[categoryFieldNameOfCategoryName(name)]) {
-          return {
-            ...list,
-            [name]: Constants.documentCategories[name]
-          };
-        }
-
-        return list;
-      }, {}),
-      'renderOrder'
-    );
-
-  const categories = categoriesOfDocument(doc);
-
-  if (!size(categories)) {
-    return null;
-  }
-  const listClassName = 'cf-no-styling-list';
-
-  return (
-    <ul className="cf-document-category-icons" aria-label="document categories">
-      {map(categories, (category) => (
-        <li
-          className={listClassName}
-          key={category.renderOrder}
-          aria-label={category.humanName}
-        >
-          {category.svg}
-        </li>
-      ))}
-    </ul>
-  );
-};
-
-CorrespondenceDocumentCategoryIcons.propTypes = {
-  doc: PropTypes.object.isRequired,
 };
 
 export default CorrespondencePdfUI;
