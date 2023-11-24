@@ -64,10 +64,12 @@ const CorrespondencePdfUI = () => {
   const [pdfDocProxy, setPdfDocProxy] = useState(null);
   const [pdfPageProxies, setPdfPageProxies] = useState(null);
 
+  // Once the component loads, we fetch the document from the Document Controller
+  // and retrieve the document content via pdfjs library's PdfDocumentProxy object.
+  // See https://mozilla.github.io/pdf.js/api/draft/module-pdfjsLib-PDFDocumentProxy.html
   useEffect(() => {
-    const getAllPages = (pdfDocument) => {
+    const getAllPages = async (pdfDocument) => {
       const promises = _.range(0, pdfDocument?.numPages).map((index) => {
-
         return pdfDocument.getPage(pageNumberOfPageIndex(index));
       });
 
@@ -75,14 +77,12 @@ const CorrespondencePdfUI = () => {
     };
 
     const loadPdf = async () => {
-
       const response = await ApiUtil.get(`${doc.content_url}`, {
         cache: true,
         withCredentials: true,
         timeout: true,
         responseType: 'arraybuffer',
       });
-
       const loadingTask = pdfjs.getDocument({ data: response.body });
       const pdfDocument = await loadingTask.promise;
 
@@ -93,8 +93,14 @@ const CorrespondencePdfUI = () => {
     };
 
     loadPdf();
+
+    return () => {
+      pdfDocProxy.destroy();
+    };
   }, []);
 
+  console.log(pdfDocProxy)
+  console.log(pdfPageProxies)
   // Constants
   const ZOOM_RATE = 0.3;
   const MINIMUM_ZOOM = 0.1;
@@ -158,9 +164,10 @@ const CorrespondencePdfUI = () => {
         handleDocumentRotation={handleDocumentRotation}
         handleSearchBarToggle={handleSearchBarToggle} />
       <div>
-        {pdfDocProxy &&
+        {(pdfDocProxy && pdfPageProxies) &&
           <CorrespondencePdfDocument
             pdfDocProxy={pdfDocProxy}
+            pdfPageProxies={pdfPageProxies}
             scale={scale}
             isVisible
             viewport={viewport}

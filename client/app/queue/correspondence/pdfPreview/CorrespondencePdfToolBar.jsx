@@ -108,13 +108,13 @@ const CorrespondencePdfToolBar = (props) => {
           ariaLabel="fit to screen">
           <FitToScreenIcon />
         </Button>
-        <Button
+        {/* <Button
           name="rotation"
           classNames={['cf-pdf-button cf-pdf-spaced-buttons']}
           onClick={handleDocumentRotation}
           ariaLabel="rotate document">
           <RotateIcon />
-        </Button>
+        </Button> */}
         <span className="cf-pdf-spaced-buttons">|</span>
         <Button
           name="download"
@@ -123,14 +123,14 @@ const CorrespondencePdfToolBar = (props) => {
           ariaLabel="download pdf">
           <DownloadIcon />
         </Button>
-        <Button
+        {/* <Button
           name="search"
           classNames={['cf-pdf-button cf-pdf-search usa-search usa-search-small']}
           ariaLabel="search text"
           type="submit"
           onClick={handleSearchBarToggle}>
           <SearchIcon />
-        </Button>
+        </Button> */}
       </span>
     </div>
   );
