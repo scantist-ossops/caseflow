@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "helpers/duplicate_veteran_checker"
 # Test it checks for veteran duplicates
 RSpec.feature DuplicateVeteranChecker do
   ##
@@ -159,8 +160,8 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      it "gets list of Documents with the original file number" do
-        describe "checks relations to Documents" do
+      describe "gets list of Documents with the original file number" do
+        it "checks relations to Documents" do
         end
 
         it "gets total related Documents count" do
