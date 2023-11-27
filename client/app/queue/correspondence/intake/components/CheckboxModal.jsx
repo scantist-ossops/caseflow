@@ -53,13 +53,6 @@ const CheckboxModal = (props) => {
           name: 'Add',
           onClick: () => props.handleAccept(toggledCheckBoxes),
           disabled: false,
-        },
-        {
-          id: 'clear-checkboxes-button',
-          classNames: ['usa-button', 'usa-button-secondary', 'usa-grid-full'],
-          name: 'Clear all',
-          onClick: () => handleClear(),
-          disabled: false
         }
       ]}>
       <div style={{
