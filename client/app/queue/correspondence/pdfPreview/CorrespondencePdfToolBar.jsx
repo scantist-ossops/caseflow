@@ -27,7 +27,6 @@ const CorrespondencePdfToolBar = (props) => {
   // PDF Document Viewer is 800px wide or less.
   const pdfWrapperSmall = 1165;
   const pdfToolbarStyles = {
-    openSidebarMenu: css({ marginRight: '2%' }),
     toolbar: css({ width: '33%' }),
     toolbarLeft: css({
       '&&': { [`@media(max-width:${pdfWrapperSmall}px)`]: {
@@ -64,7 +63,7 @@ const CorrespondencePdfToolBar = (props) => {
   };
 
   return (
-    <div className="cf-pdf-header cf-pdf-toolbar">
+    <div className="cf-pdf-preview-header cf-pdf-toolbar">
       <span {...pdfToolbarStyles.toolbar} {...pdfToolbarStyles.toolbarCenter}>
         <span className="category-icons-and-doc-type">
           <span className="cf-pdf-doc-category-icons">

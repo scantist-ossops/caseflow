@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
 import * as pdfjs from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.entry';
@@ -10,6 +10,8 @@ import CorrespondencePdfToolBar from './CorrespondencePdfToolBar';
 import ApiUtil from '../../../util/ApiUtil';
 import { pageNumberOfPageIndex } from '../../../reader/utils';
 import { PDF_PAGE_HEIGHT, PDF_PAGE_WIDTH } from '../../../reader/constants';
+import { CorrespondencePdfFooter } from './CorrespondencePdfFooter';
+import uuid from 'uuid';
 
 pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
@@ -25,6 +27,7 @@ const CorrespondencePdfUI = () => {
   //   doc
   // } = props;
 
+  // Hard Coded Temp Data Objects
   const documentPathBase = '/2941741/documents';
   const doc = {
     id: 13,
@@ -54,6 +57,12 @@ const CorrespondencePdfUI = () => {
     wasUpdated: false
   };
 
+  // useRefs (persist data through React render cycle)
+
+  // Contains a ref to each canvas DOM element generated after document loads
+  const canvasRefs = useRef([]);
+
+  // useStates (re-renders components on change)
   const [viewport, setViewPort] = useState({
     height: PDF_PAGE_HEIGHT,
     width: PDF_PAGE_WIDTH
@@ -63,6 +72,7 @@ const CorrespondencePdfUI = () => {
   const [searchBarToggle, setSearchBarToggle] = useState(false);
   const [pdfDocProxy, setPdfDocProxy] = useState(null);
   const [pdfPageProxies, setPdfPageProxies] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Once the component loads, we fetch the document from the Document Controller
   // and retrieve the document content via pdfjs library's PdfDocumentProxy object.
@@ -99,8 +109,6 @@ const CorrespondencePdfUI = () => {
     };
   }, []);
 
-  console.log(pdfDocProxy)
-  console.log(pdfPageProxies)
   // Constants
   const ZOOM_RATE = 0.3;
   const MINIMUM_ZOOM = 0.1;
@@ -108,11 +116,7 @@ const CorrespondencePdfUI = () => {
   const ROTATION_INCREMENTS = 90;
   const COMPLETE_ROTATION = 360;
 
-  const pdfUiClass = classNames(
-    'cf-pdf-container');
-
   const pdfWrapper = css({
-    width: '72%',
     '@media(max-width: 920px)': {
       width: 'unset',
       right: '250px' },
@@ -145,7 +149,6 @@ const CorrespondencePdfUI = () => {
   // Rotations
   const handleDocumentRotation = (docId) => {
     setRotation((prev) => (prev + 90) % 360);
-    console.log('hi');
   };
 
   // Search Bar
@@ -153,8 +156,56 @@ const CorrespondencePdfUI = () => {
     setSearchBarToggle(!searchBarToggle);
   };
 
+  // Footer Pagination
+  const handleSetPage = (val) => {
+    console.log(val);
+    setCurrentPage(val);
+  };
+
+  // After the doc is fetched, we count the number of pages.
+  // We then generate an array of canvases for each page. We do not re-render these canvases, instead we should use
+  // An effect where we repaint the canvases using the new viewport contexts
+
+  const renderCanvases = () => {
+    if (!pdfDocProxy) {
+      return <div>Loading...</div>;
+    }
+
+    return pdfPageProxies.map((page, index) =>
+      <CorrespondencePdfPage index={index} canvasRefs={canvasRefs} id={uuid()} />
+    );
+  };
+
+  const memoizeCanvases = useMemo(renderCanvases, [pdfDocProxy]);
+
+  const drawPage = (page, index) => {
+    const canvas = document.getElementById(`canvas-${index}`);
+    const context = canvas.getContext('2d');
+    const viewport = page.getViewport({ scale });
+
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    const renderOptions = {
+      canvasContext: context,
+      viewport,
+    };
+
+    page.render(renderOptions);
+  };
+
+  const drawAllPages = () => {
+    pdfPageProxies.forEach((page, index) => {
+      drawPage(page, index);
+    });
+  };
+
+  if (!pdfDocProxy || !pdfPageProxies) {
+    return <div>Loading...</div>;
+  }
+
   return (
-    <div className={pdfUiClass} {...pdfWrapper}>
+    <div className="cf-pdf-preview-container" {...pdfWrapper}>
       <CorrespondencePdfToolBar
         doc={doc}
         documentPathBase={documentPathBase}
@@ -164,36 +215,36 @@ const CorrespondencePdfUI = () => {
         handleDocumentRotation={handleDocumentRotation}
         handleSearchBarToggle={handleSearchBarToggle} />
       <div>
-        {(pdfDocProxy && pdfPageProxies) &&
-          <CorrespondencePdfDocument
-            pdfDocProxy={pdfDocProxy}
-            pdfPageProxies={pdfPageProxies}
-            scale={scale}
-            isVisible
-            viewport={viewport}
-            setViewPort={setViewPort}
-          />
-        }
-
-        {/* <DocumentSearch file={this.props.doc.content_url} featureToggles={this.props.featureToggles} />
-        <Pdf
-          documentId={this.props.doc.id}
-          documentPathBase={this.props.documentPathBase}
-          documentType={this.props.doc.type}
-          file={this.props.doc.content_url}
-          id={this.props.id}
-          history={this.props.history}
-          onPageClick={this.props.onPageClick}
-          scale={this.props.scale}
-          onPageChange={this.onPageChange}
-          prefetchFiles={this.props.prefetchFiles}
-          resetJumpToPage={this.props.resetJumpToPage}
-          featureToggles={this.props.featureToggles}
-        /> */}
+        {/* <div className="cf-pdf-preview-scrollview">
+          <div className="cf-pdf-preview-grid">
+            {renderCanvases()}
+          </div>
+        </div> */}
+        <CorrespondencePdfDocument
+          pdfDocProxy={pdfDocProxy}
+          pdfPageProxies={pdfPageProxies}
+          scale={scale}
+          viewport={viewport}
+          setViewPort={setViewPort}
+        />
+        <CorrespondencePdfFooter
+          currentPage={currentPage}
+          setCurrentPage={handleSetPage}
+          doc={pdfDocProxy}
+        />
       </div>
-
-      {/* { this.getPdfFooter() } */}
     </div>
+  );
+};
+
+const CorrespondencePdfPage = (props) => {
+  const { canvasRefs, index, id } = props;
+
+  return (
+    <canvas
+      id={`canvas-${index}`}
+      className={`canvasWrapper ${id}`}
+      ref={(ref) => (canvasRefs.current[index] = ref)} />
   );
 };
 

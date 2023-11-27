@@ -4,92 +4,47 @@ import PropTypes from 'prop-types';
 
 // Local Dependencies
 import { toolbarStyles } from 'styles/reader/Document/PDF';
-import Button from 'app/components/Button';
 import TextField from 'app/components/TextField';
-import { FilterNoOutlineIcon } from 'app/components/icons/FilterNoOutlineIcon';
-import { PageArrowLeftIcon } from 'app/components/icons/PageArrowLeftIcon';
-import { PageArrowRightIcon } from 'app/components/icons/PageArrowRightIcon';
 
 /**
  * Document Footer displays the PDF footer controls
  * @param {Object} props -- Contains details about the current and previous documents
  */
-export const CorrespondenceDocumentFooter = ({
-  currentIndex,
-  prevDocId,
-  nextDocId,
-  loadError,
-  docsFiltered,
-  filteredDocIds,
-  nextDoc,
-  prevDoc,
+export const CorrespondencePdfFooter = ({
+  currentPage,
   doc,
-  setPageNumber
+  setCurrentPage
 }) => (
-  <div className="cf-pdf-footer cf-pdf-toolbar" {...toolbarStyles.footer}>
-    <div className="cf-pdf-footer-buttons-left">
-      {prevDocId !== 0 && (
-        <Button
-          id="button-previous"
-          name="previous"
-          classNames={['cf-pdf-button']}
-          onClick={prevDoc}
-          ariaLabel="previous PDF"
-        >
-          <PageArrowLeftIcon />
-          <span className="left-button-label">Previous</span>
-        </Button>
-      )}
-    </div>
+  <div className="cf-pdf-footer cf-pdf-toolbar">
     <div className="cf-pdf-buttons-center">
-      {!loadError && (
-        <span>
-          <span className="page-progress-indicator">
-            {doc.numPages ? (
-              <span>
-                <div style={{ display: 'inline-block' }}>
-                  <TextField
-                    maxLength={4}
-                    name="page-progress-indicator-input"
-                    label="Page"
-                    onChange={setPageNumber}
-                    value={doc.currentPage}
-                    required={false}
-                    className={['page-progress-indicator-input']}
-                  />
-                </div>
+      <span>
+        <span className="page-progress-indicator">
+          {doc.numPages ? (
+            <span>
+              <div style={{ display: 'inline-block' }}>
+                <TextField
+                  maxLength={4}
+                  name="page-progress-indicator-input"
+                  label="Page"
+                  onChange={setCurrentPage}
+                  value={currentPage}
+                  required={false}
+                  className={['page-progress-indicator-input']}
+                />
+              </div>
                 of {doc.numPages}
-              </span>
-            ) : (
-              <em>Loading document...</em>
-            )}
-          </span>
-          |
+            </span>
+          ) : (
+            <em>Loading document...</em>
+          )}
         </span>
-      )}
-      <span className="doc-list-progress-indicator">
-        {docsFiltered && <FilterNoOutlineIcon />}
-        Document {currentIndex + 1} of {filteredDocIds.length}
+          |
       </span>
-    </div>
-    <div className="cf-pdf-footer-buttons-right">
-      {nextDocId !== 0 && (
-        <Button
-          id="button-next"
-          name="next"
-          classNames={['cf-pdf-button cf-right-side']}
-          onClick={nextDoc}
-          ariaLabel="next PDF"
-        >
-          <span className="right-button-label">Next</span>
-          <PageArrowRightIcon />
-        </Button>
-      )}
     </div>
   </div>
 );
 
-CorrespondenceDocumentFooter.propTypes = {
+CorrespondencePdfFooter.propTypes = {
   currentIndex: PropTypes.number,
   prevDocId: PropTypes.number,
   nextDocId: PropTypes.number,
