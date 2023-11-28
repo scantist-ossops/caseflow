@@ -30,12 +30,13 @@ RSpec.feature DuplicateVeteranChecker do
     context "finds pair of duplicate veterans" do
       describe "checks for duplicate veterans by file number" do
         it "aborts if veteran not found with file number" do
+          dup_veteran1
           expect(subject.run_remediation(duplicate_file_number))
             .to output(a_string_including("No veteran found. Aborting"))
         end
 
-        # can't test for this one yet. Can't create two veterans with same file number.
-        xit "aborts if more than one or none veterans have the duplicated number" do
+        # can't test for more than one in this one yet. Can't create two veterans with same file number.
+        it "aborts if more than one or none veterans have the duplicated number" do
           expect(subject.run_remediation(duplicate_file_number))
             .to output(a_string_including("More than on vet with the duplicate veteran file number exists. Aborting.."))
         end
@@ -43,6 +44,7 @@ RSpec.feature DuplicateVeteranChecker do
 
       xdescribe "checks for duplicate veterans by participant id or ssn" do
         it "aborts if no duplicate veteran found" do
+          expect(subject.run_remediation(duplicate_file_number)).to output(a_string_including("No duplicate veteran found"))
         end
 
         it "aborts if more than two duplicated veterans found" do
