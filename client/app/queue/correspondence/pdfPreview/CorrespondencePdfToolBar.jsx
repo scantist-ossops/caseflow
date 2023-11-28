@@ -69,7 +69,7 @@ const CorrespondencePdfToolBar = (props) => {
           <span className="cf-pdf-doc-category-icons">
             <CorrespondenceDocumentCategoryIcons doc={doc} />
           </span>
-          <span className="cf-pdf-doc-type-button-container">
+          <span className="cf-pdf-preview-doc-type-button-container">
             <Link
               name="newTab"
               ariaLabel="open document in new tab"

@@ -3,8 +3,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 
 // Local Dependencies
-import { toolbarStyles } from 'styles/reader/Document/PDF';
-import TextField from 'app/components/TextField';
+import NumberField from '../../../components/NumberField';
 
 /**
  * Document Footer displays the PDF footer controls
@@ -12,37 +11,39 @@ import TextField from 'app/components/TextField';
  */
 export const CorrespondencePdfFooter = ({
   currentPage,
-  doc,
-  setCurrentPage
-}) => (
-  <div className="cf-pdf-footer cf-pdf-toolbar">
-    <div className="cf-pdf-buttons-center">
-      <span>
-        <span className="page-progress-indicator">
-          {doc.numPages ? (
-            <span>
-              <div style={{ display: 'inline-block' }}>
-                <TextField
-                  maxLength={4}
-                  name="page-progress-indicator-input"
-                  label="Page"
-                  onChange={setCurrentPage}
-                  value={currentPage}
-                  required={false}
-                  className={['page-progress-indicator-input']}
-                />
-              </div>
-                of {doc.numPages}
-            </span>
-          ) : (
-            <em>Loading document...</em>
-          )}
-        </span>
+  pdfDocProxy,
+  handleSetCurrentPage
+}) => {
+  return (
+    <div className="cf-pdf-footer cf-pdf-toolbar">
+      <div className="cf-pdf-buttons-center">
+        <span>
+          <span className="page-progress-indicator">
+            {pdfDocProxy.numPages ? (
+              <span>
+                <div style={{ display: 'inline-block' }}>
+                  <NumberField
+                    maxLength={4}
+                    name="page-progress-indicator-input"
+                    label="Page"
+                    onChange={handleSetCurrentPage}
+                    value={currentPage}
+                    required={false}
+                    className={['page-progress-indicator-input']}
+                  />
+                </div>
+                of {pdfDocProxy.numPages}
+              </span>
+            ) : (
+              <em>Loading document...</em>
+            )}
+          </span>
           |
-      </span>
+        </span>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 CorrespondencePdfFooter.propTypes = {
   currentIndex: PropTypes.number,
@@ -57,6 +58,6 @@ CorrespondencePdfFooter.propTypes = {
   setPageNumber: PropTypes.func,
   handleKeyPress: PropTypes.func,
   pageNumber: PropTypes.number,
-  doc: PropTypes.object,
+  pdfDocProxy: PropTypes.object,
 };
 

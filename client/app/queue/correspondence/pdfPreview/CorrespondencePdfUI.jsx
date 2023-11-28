@@ -8,7 +8,7 @@ import _ from 'lodash';
 import CorrespondencePdfDocument from './CorrespondencePdfDocument';
 import CorrespondencePdfToolBar from './CorrespondencePdfToolBar';
 import ApiUtil from '../../../util/ApiUtil';
-import { pageNumberOfPageIndex } from '../../../reader/utils';
+import { pageIndexOfPageNumber, pageNumberOfPageIndex } from '../../../reader/utils';
 import { PDF_PAGE_HEIGHT, PDF_PAGE_WIDTH } from '../../../reader/constants';
 import { CorrespondencePdfFooter } from './CorrespondencePdfFooter';
 import uuid from 'uuid';
@@ -58,9 +58,10 @@ const CorrespondencePdfUI = () => {
   };
 
   // useRefs (persist data through React render cycle)
-
   // Contains a ref to each canvas DOM element generated after document loads
   const canvasRefs = useRef([]);
+  const gridRef = useRef(null);
+  const scrollViewRef = useRef(null);
 
   // useStates (re-renders components on change)
   const [viewport, setViewPort] = useState({
@@ -109,6 +110,14 @@ const CorrespondencePdfUI = () => {
     };
   }, []);
 
+  useEffect(() => {
+    // if ((canvasRefs.current.length > 0) && (currentPage > 0) && Number.isInteger(currentPage)) {
+    //   const selectedPage = document.getElementById(`canvas-${currentPage}`);
+
+    //   selectedPage.scrollIntoView();
+    // }
+  }, [currentPage, setCurrentPage]);
+
   // Constants
   const ZOOM_RATE = 0.3;
   const MINIMUM_ZOOM = 0.1;
@@ -151,53 +160,13 @@ const CorrespondencePdfUI = () => {
     setRotation((prev) => (prev + 90) % 360);
   };
 
-  // Search Bar
-  const handleSearchBarToggle = () => {
-    setSearchBarToggle(!searchBarToggle);
-  };
-
   // Footer Pagination
-  const handleSetPage = (val) => {
-    console.log(val);
-    setCurrentPage(val);
-  };
+  const handleSetCurrentPage = (currentPageInput) => {
+    if ((canvasRefs.current.length > 0) && (pdfDocProxy.numPages >= currentPageInput > 0) && Number.isInteger(currentPageInput)) {
+      const selectedPage = document.getElementById(`canvas-${currentPageInput}`);
 
-  // After the doc is fetched, we count the number of pages.
-  // We then generate an array of canvases for each page. We do not re-render these canvases, instead we should use
-  // An effect where we repaint the canvases using the new viewport contexts
-
-  const renderCanvases = () => {
-    if (!pdfDocProxy) {
-      return <div>Loading...</div>;
+      selectedPage.scrollIntoView();
     }
-
-    return pdfPageProxies.map((page, index) =>
-      <CorrespondencePdfPage index={index} canvasRefs={canvasRefs} id={uuid()} />
-    );
-  };
-
-  const memoizeCanvases = useMemo(renderCanvases, [pdfDocProxy]);
-
-  const drawPage = (page, index) => {
-    const canvas = document.getElementById(`canvas-${index}`);
-    const context = canvas.getContext('2d');
-    const viewport = page.getViewport({ scale });
-
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    const renderOptions = {
-      canvasContext: context,
-      viewport,
-    };
-
-    page.render(renderOptions);
-  };
-
-  const drawAllPages = () => {
-    pdfPageProxies.forEach((page, index) => {
-      drawPage(page, index);
-    });
   };
 
   if (!pdfDocProxy || !pdfPageProxies) {
@@ -212,39 +181,27 @@ const CorrespondencePdfUI = () => {
         zoomIn={zoomIn}
         zoomOut={zoomOut}
         fitToScreen={fitToScreen}
-        handleDocumentRotation={handleDocumentRotation}
-        handleSearchBarToggle={handleSearchBarToggle} />
+      />
       <div>
-        {/* <div className="cf-pdf-preview-scrollview">
-          <div className="cf-pdf-preview-grid">
-            {renderCanvases()}
-          </div>
-        </div> */}
         <CorrespondencePdfDocument
           pdfDocProxy={pdfDocProxy}
           pdfPageProxies={pdfPageProxies}
           scale={scale}
           viewport={viewport}
           setViewPort={setViewPort}
+          canvasRefs={canvasRefs}
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          gridRef={gridRef}
+          scrollViewRef={scrollViewRef}
         />
         <CorrespondencePdfFooter
           currentPage={currentPage}
-          setCurrentPage={handleSetPage}
-          doc={pdfDocProxy}
+          handleSetCurrentPage={handleSetCurrentPage}
+          pdfDocProxy={pdfDocProxy}
         />
       </div>
     </div>
-  );
-};
-
-const CorrespondencePdfPage = (props) => {
-  const { canvasRefs, index, id } = props;
-
-  return (
-    <canvas
-      id={`canvas-${index}`}
-      className={`canvasWrapper ${id}`}
-      ref={(ref) => (canvasRefs.current[index] = ref)} />
   );
 };
 

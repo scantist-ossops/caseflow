@@ -23,6 +23,11 @@
   overflow-y: scroll;
 }
 
+.cf-pdf-preview-doc-type-button-container {
+  flex: 0 1 auto;
+  min-width: 80px;
+}
+
 // .cf-pdf-preview-grid {
 //   width: fit-content;
 //   display: grid;
