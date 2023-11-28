@@ -22,9 +22,9 @@ RSpec.shared_context "veterans", shared_context: :metadata do
   let!(:duplicate_file_number) { "123456789" }
 
   # --- Create veteran one with duplicate file number
-  let!(:ssn1) { "864296984" }
-  let!(:participant_id1) { "987654" }
-  let!(:dup_veteran1) do
+  let(:ssn1) { "864296984" }
+  let(:participant_id1) { "987654" }
+  let(:dup_veteran1) do
     create(:veteran, file_number: duplicate_file_number, ssn: ssn1, participant_id: participant_id1)
   end
 
