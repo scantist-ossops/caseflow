@@ -1,87 +1,54 @@
 # frozen_string_literal: true
 
 require "helpers/duplicate_veteran_checker"
+require "./spec/lib/helpers/shared/veterans_context"
+
 # Test it checks for veteran duplicates
 RSpec.feature DuplicateVeteranChecker do
-  ##
-  # -- run_remediation notes
-  # We may need the following variables:
-  # vets = lits of veterans using factorybot
-  # v = Veteran.find_by_file_number(duplicate_veteran_file_number)
-  # Check if there in fact duplicate veterans. Can be duplicated with
-  # same partipant id or ssn
-  # dupe_vets = Veteran.where("ssn = ? or participant_id = ?", v.ssn, v.participant_id)
-  # Get the correct file number from a BGS call out
-  # file_number = BGSService.new.fetch_file_number_by_ssn(vet_s
-  # las = LegacyAppeal.where(vbms_id: convert_file_number_to_legacy(old_file_number))
-  # ahls = AvailableHearingLocations.where(veteran_file_number: old_file_number)
-  # bpoas = BgsPowerOfAttorney.where(file_number: old_file_number)
-  # ds = Document.where(file_number: old_file_number)
-  # epes = EndProductEstablishment.where(veteran_file_number: old_file_number)
-  # f8s = Form8.where(file_number: convert_file_number_to_legacy(old_file_number))
-  # hlrs = HigherLevelReview.where(veteran_file_number: old_file_number)
-  # is_fn = Intake.where(veteran_file_number: old_file_number)
-  # is_vi = Intake.where(veteran_id: v.id)
-  # res = RampElection.where(veteran_file_number: old_file_number)
-  # rrs = RampRefiling.where(veteran_file_number: old_file_number)
-  # scs = SupplementalClaim.where(veteran_file_number: old_file_number)
-  # as2 = Appeal.where(veteran_file_number: file_number)
-  # las2 = LegacyAppeal.where(vbms_id: convert_file_number_to_legacy(file_number))
-  # ahls2 = AvailableHearingLocations.where(veteran_file_number: file_number)
-  # bpoas2 = BgsPowerOfAttorney.where(file_number: file_number)
-  # ds2 = Document.where(file_number: file_number)
-  # epes2 = EndProductEstablishment.where(veteran_file_number: file_number)
-  # f8s2 = Form8.where(file_number: convert_file_number_to_legacy(file_number))
-  # f8s2 = Form8.where(file_number: convert_file_number_to_legacy(file_number
-  # hlrs2 = HigherLevelReview.where(veteran_file_number: file_number)
-  # is_fn2 = Intake.where(veteran_file_number: file_number)
-  # is_vi2 = Intake.where(veteran_id: v.id)
-  # res2 = RampElection.where(veteran_file_number: file_number)
-  # rrs2 = RampRefiling.where(veteran_file_number: file_number)
-  # scs2 = SupplementalClaim.where(veteran_file_number: file_number)
+  include_context "veterans"
 
-  describe "can check_by_ama_appeal_uuid" do
-    # TODO: Add test here
-    it "simple math" do
-      expect(1 + 1).to eq(2)
-    end
-  end
-
-  describe "run_remediation_by_ama_appeal_uuid" do
+  xdescribe "can check_by_ama_appeal_uuid" do
     # TODO: Add test here
   end
 
-  describe "check_by_legacy_appeal_vacols_id" do
+  xdescribe "run_remediation_by_ama_appeal_uuid" do
     # TODO: Add test here
   end
 
-  describe "run_remediation_by_vacols_id" do
+  xdescribe "check_by_legacy_appeal_vacols_id" do
     # TODO: Add test here
   end
-  describe "check_by_duplicate_veteran_file_number" do
+
+  xdescribe "run_remediation_by_vacols_id" do
+    # TODO: Add test here
+  end
+  xdescribe "check_by_duplicate_veteran_file_number" do
     # TODO: Add test here
   end
 
   describe "run_remediation" do
-    # TODO: Add test here
-
     context "finds pair of duplicate veterans" do
       describe "checks for duplicate veterans by file number" do
-        it "aborts if more than one or none veterans have the duplicated number" do
+        it "aborts if veteran not found with file number" do
+          expect(subject.run_remediation(duplicate_file_number))
+            .to output(a_string_including("No veteran found. Aborting"))
         end
 
-        it "aborts if veteran not found with file number" do
+        # can't test for this one yet. Can't create two veterans with same file number.
+        xit "aborts if more than one or none veterans have the duplicated number" do
+          expect(subject.run_remediation(duplicate_file_number))
+            .to output(a_string_including("More than on vet with the duplicate veteran file number exists. Aborting.."))
         end
       end
 
-      describe "checks for duplicate veterans by participant id or ssn" do
+      xdescribe "checks for duplicate veterans by participant id or ssn" do
         it "aborts if no duplicate veteran found" do
         end
 
         it "aborts if more than two duplicated veterans found" do
         end
 
-        describe "when there is pair of duplicate veterans found" do
+        xdescribe "when there is pair of duplicate veterans found" do
           it "confirms first veteran in pair is indeed a duplicate and assigns second veteran to other_v variable" do
             # I have now vet1 and vet2
           end
@@ -116,7 +83,7 @@ RSpec.feature DuplicateVeteranChecker do
     ##
 
     context "checks all possible relations to the duplicate veteran" do
-      describe "checks relations to Appeals" do
+      xdescribe "checks relations to Appeals" do
         it "gets list of Appeals with the original file number" do
         end
 
@@ -127,7 +94,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'Legacy Appeals'" do
+      xdescribe "checks relations to 'Legacy Appeals'" do
         it "gets list of 'Legacy Appeals' with the original file number" do
         end
 
@@ -138,7 +105,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'Available Hearing Locations'" do
+      xdescribe "checks relations to 'Available Hearing Locations'" do
         it "gets list of 'Available Hearing Locations' with the original file number" do
         end
 
@@ -149,7 +116,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'BGS Power of Attorneys'" do
+      xdescribe "checks relations to 'BGS Power of Attorneys'" do
         it "gets list of 'BGS Power of Attorneys' with the original file number" do
         end
 
@@ -160,7 +127,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "gets list of Documents with the original file number" do
+      xdescribe "gets list of Documents with the original file number" do
         it "checks relations to Documents" do
         end
 
@@ -171,7 +138,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'End Product Establishment'" do
+      xdescribe "checks relations to 'End Product Establishment'" do
         it "gets list of 'End Product Establishment' with the original file number" do
         end
 
@@ -182,7 +149,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'Form 8'" do
+      xdescribe "checks relations to 'Form 8'" do
         it "gets list of 'Form 8' with the original file number" do
         end
 
@@ -193,7 +160,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'Higher Level Review'" do
+      xdescribe "checks relations to 'Higher Level Review'" do
         it "gets list of 'Higher Level Review' with the original file number" do
         end
 
@@ -204,7 +171,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'Intakes related by file number'" do
+      xdescribe "checks relations to 'Intakes related by file number'" do
         it "gets list of 'Intakes related by file number' with the original file number" do
         end
 
@@ -215,7 +182,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'Intakes related by veteran id'" do
+      xdescribe "checks relations to 'Intakes related by veteran id'" do
         it "gets list of 'Intakes related by veteran id' with the original file number" do
         end
 
@@ -226,7 +193,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'Ramp Election'" do
+      xdescribe "checks relations to 'Ramp Election'" do
         it "gets list of 'Ramp Election' with the original file number" do
         end
 
@@ -237,7 +204,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'Ramp Refiling'" do
+      xdescribe "checks relations to 'Ramp Refiling'" do
         it "gets list of 'Ramp Refiling' with the original file number" do
         end
 
@@ -248,7 +215,7 @@ RSpec.feature DuplicateVeteranChecker do
         end
       end
 
-      describe "checks relations to 'Supplemental Claim'" do
+      xdescribe "checks relations to 'Supplemental Claim'" do
         it "gets list of 'Supplemental Claim' with the original file number" do
         end
 
@@ -260,7 +227,7 @@ RSpec.feature DuplicateVeteranChecker do
       end
     end
 
-    describe "Migrate duplicate veteran relations to correct veteran" do
+    xdescribe "Migrate duplicate veteran relations to correct veteran" do
       # Notes
       # 552 -> 'as_update_count', appeals update count.
       # 554 -> if true updates 'error_relations' variable.
@@ -293,21 +260,21 @@ RSpec.feature DuplicateVeteranChecker do
       #
     end
 
-    describe "all duplicate relationships are gone" do
+    xdescribe "all duplicate relationships are gone" do
       # --- Check all duplicate veteran relationships are all gone.
       # 645 to 746 -> gets a count for each of the above and checks that is zero.
       # if not, it puts still exists.
       # 748 -> checks whether existing relationships are empty. If not puts a message requesting to resolve.
     end
 
-    describe "deletes duplicate veteran" do
+    xdescribe "deletes duplicate veteran" do
       # --- Delete duplicate vetearn.
       # 754 -> destroy extra veteran record.
       # 756 -> verify it was deleted.
     end
   end
 
-  describe "convert_file_number_to_legacy" do
+  xdescribe "convert_file_number_to_legacy" do
     # TODO: Add test here
   end
 end
