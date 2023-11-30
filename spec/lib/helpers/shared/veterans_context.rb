@@ -29,10 +29,12 @@ RSpec.shared_context "veterans", shared_context: :metadata do
   end
 
   # --- Create veteran two with duplicate file number
-  # Can't do this yet because of the unique constrain.
+  let!(:ssn2) { "704545973" }
+  let!(:participant_id2) { "987655" }
 
-  # let!(:ssn2) { "704545973" }
-  # let!(:participant_id2) { "987655" }
+  let(:dup_veteran2) do
+    instance_double("Veteran", file_number: duplicate_file_number, ssn: ssn2, participant_id: participant_id2)
+  end
   # let!(:dup_veteran2) do
   #   create(:veteran, file_number: duplicate_file_number, ssn: ssn2, participant_id: participant_id2)
   # end
