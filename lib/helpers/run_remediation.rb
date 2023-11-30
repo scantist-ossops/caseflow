@@ -3,6 +3,11 @@
 class RunRemediation
   def initialize(duplicate_veteran_file_number)
     @duplicate_veteran_file_number = duplicate_veteran_file_number
+    @v = Veteran.find_by_file_number(@duplicate_veteran_file_number)
+    @old_file_number = @v.file_number
+    @vet_ssn = @v.ssn
+    @dupe_vets = Veteran.where("ssn = ? or participant_id = ?", @v.ssn, @v.participant_id)
+    @v2 = nil
   end
 
   def find_duplicate_vets
@@ -14,65 +19,32 @@ class RunRemediation
     end
   end
 
-  # Get the duplicate veteran into memory
-  v = Veteran.find_by_file_number(duplicate_veteran_file_number)
-
-  # Set variable to hold old file_number (file number on duplicate veteran)
-  old_file_number = v.file_number
-
-  # Check if veteran is not found
-  # if v.nil?
-  #   puts("No veteran found. Aborting.")
-  #   fail Interrupt
-  # end
-
-  def check_for_vet
-    puts("No veteran found. Aborting.") if v.nil?
+  def check_vet_nil?
+    puts("No veteran found. Aborting.") if @v.nil?
+    fail Interrupt
   end
 
-  # Check if there in fact duplicate veterans. Can be duplicated with
-  # same partipant id or ssn
-  dupe_vets = Veteran.where("ssn = ? or participant_id = ?", v.ssn,
-                            v.participant_id)
+  def set_duplicate_vet_pair
+    verify_pair
 
-  v2 = nil
+    other_v = @dupe_vets.first # grab first of the dupilicates and check if the duplicate veteran}
+    if other_ @v.file_number == @old_file_number
+      other_v = @dupe_vets.last # First is duplicate veteran so get 2nd
+    end
 
-  vet_ssn = v.ssn
-  # checks if we get no vets or les sthan 2 vets}
-  if dupe_vets.nil? || dupe_vets.count < 2
-    puts("No duplicate veteran found")
-    fail Interrupt
-  elsif dupe_vets.count > 2 # check if we get more than 2 vets back
-    puts("More than two veterans found. Aborting")
-    fail Interrupt
-  else
-    other_v = dupe_vets.first # grab first of the dupilicates and check if the duplicate veteran}
-    if other_v.file_number == old_file_number
-      other_v = dupe_vets.last # First is duplicate veteran so get 2nd
-    end
-    if other_v.file_number.empty? || other_v.file_number == old_file_number # if correct veteran has wrong file number
-      puts("Both veterans have the same file_number or No file_number on the correct veteran. Aborting...")
-      fail Interrupt
-    elsif v.ssn.empty? && !other_v.ssn.empty?
-      vet_ssn = other_v.ssn
-    elsif v.ssn.empty? && other_v.ssn.empty?
-      puts("Neither veteran has a ssn and a ssn is needed to check the BGS file number. Aborting")
-      fail Interrupt
-    elsif !other_v.ssn.empty? && v.ssn != other_v.ssn
-      puts("Veterans do not have the same ssn and a correct ssn needs to be chosen. Aborting.")
-      fail Interrupt
-    else
-      vet_ssn = v.ssn
-    end
-    v2 = other_v
+    duplicate_vet_ssn(other_v)
+
+    @v2 = other_v
   end
+
+  # 🚧 ⬇️
 
   duplicate_relations = ""
 
   # Get the correct file number from a BGS call out
-  file_number = BGSService.new.fetch_file_number_by_ssn(vet_ssn)
+  file_number = BGSService.new.fetch_file_number_by_ssn(@vet_ssn)
 
-  if file_number != v2.file_number
+  if file_number != @v2.file_number
     puts("File number from BGS does not match correct veteran record. Aborting...")
     fail Interrupt
   end
@@ -80,79 +52,79 @@ class RunRemediation
   # The following code runs through all possible relations
   # to the duplicat evetran by file number or veteran id
   # collects all counts and displays all relations
-  as = Appeal.where(veteran_file_number: old_file_number)
+  as = Appeal.where(veteran_file_number: @old_file_number)
 
   as_count = as.count
 
   duplicate_relations += as_count.to_s + " Appeals\n"
 
-  las = LegacyAppeal.where(vbms_id: convert_file_number_to_legacy(old_file_number))
+  las = LegacyAppeal.where(vbms_id: convert_file_number_to_legacy(@old_file_number))
 
   las_count = las.count
 
   duplicate_relations += las_count.to_s + " LegacyAppeals\n"
 
-  ahls = AvailableHearingLocations.where(veteran_file_number: old_file_number)
+  ahls = AvailableHearingLocations.where(veteran_file_number: @old_file_number)
 
   ahls_count = ahls.count
 
   duplicate_relations += ahls_count.to_s + " Avialable Hearing Locations\n"
 
-  bpoas = BgsPowerOfAttorney.where(file_number: old_file_number)
+  bpoas = BgsPowerOfAttorney.where(file_number: @old_file_number)
 
   bpoas_count = bpoas.count
 
   duplicate_relations += bpoas_count.to_s + " BgsPowerOfAAttorneys\n"
 
-  ds = Document.where(file_number: old_file_number)
+  ds = Document.where(file_number: @old_file_number)
 
   ds_count = ds.count
 
   duplicate_relations += ds_count.to_s + " Documents\n"
 
-  epes = EndProductEstablishment.where(veteran_file_number: old_file_number)
+  epes = EndProductEstablishment.where(veteran_file_number: @old_file_number)
 
   epes_count = epes.count
 
   duplicate_relations += epes_count.to_s + " EndProductEstablishment\n"
 
-  f8s = Form8.where(file_number: convert_file_number_to_legacy(old_file_number))
+  f8s = Form8.where(file_number: convert_file_number_to_legacy(@old_file_number))
 
   f8s_count = f8s.count
 
   duplicate_relations += f8s_count.to_s + " Form8\n"
 
-  hlrs = HigherLevelReview.where(veteran_file_number: old_file_number)
+  hlrs = HigherLevelReview.where(veteran_file_number: @old_file_number)
 
   hlrs_count = hlrs.count
 
   duplicate_relations += hlrs_count.to_s + " HigherLevelReview\n"
 
-  is_fn = Intake.where(veteran_file_number: old_file_number)
+  is_fn = Intake.where(veteran_file_number: @old_file_number)
 
   is_fn_count = is_fn.count
 
   duplicate_relations += is_fn_count.to_s + " Intakes related by file number\n"
 
-  is_vi = Intake.where(veteran_id: v.id)
+  is_vi = Intake.where(veteran_id: @v.id)
 
   is_vi_count = is_vi.count
 
   duplicate_relations += is_vi_count.to_s + " Intakes related by veteran id\n"
 
-  res = RampElection.where(veteran_file_number: old_file_number)
+  res = RampElection.where(veteran_file_number: @old_file_number)
 
   res_count = res.count
 
   duplicate_relations += res_count.to_s + " RampElection\n"
 
-  rrs = RampRefiling.where(veteran_file_number: old_file_number)
+  rrs = RampRefiling.where(veteran_file_number: @old_file_number)
 
   rrs_count = rrs.count
 
   duplicate_relations += rrs_count.to_s + " RampRefiling\n"
 
-  scs = SupplementalClaim.where(veteran_file_number: old_file_number)
+  scs = SupplementalClaim.where(veteran_file_number: @old_file_number)
 
   scs_count = scs.count
 
@@ -218,7 +190,7 @@ class RunRemediation
 
   correct_relations += is_fn2_count.to_s + " Intakes related by file number\n"
 
-  is_vi2 = Intake.where(veteran_id: v.id)
+  is_vi2 = Intake.where(veteran_id: @v.id)
 
   is_vi2_count = is_vi2.count
 
@@ -310,7 +282,7 @@ class RunRemediation
     error_relations += "Expected " + is_fn_count + " Intakes by file number updated, but " + is_fn_update_count + "were updated.\n"
   end
 
-  is_vi_update_count = is_vi.update_all(veteran_id: v2.id)
+  is_vi_update_count = is_vi.update_all(veteran_id: @v2.id)
 
   if is_vi_update_count != is_vi_count
     error_relations += "Expected " + is_vi_count + " Intakes by veteran id updated, but " + is_vi_update_count + "were updated.\n"
@@ -343,28 +315,28 @@ class RunRemediation
 
   # Check if duplicate veteran relationships are all gone
   existing_relations = ""
-  as = Appeal.where(veteran_file_number: old_file_number)
+  as = Appeal.where(veteran_file_number: @old_file_number)
 
   as_count = as.count
   if as_count != 0
     existing_relations += as_count.to_s + " Appeal still exists.\n"
   end
 
-  las = LegacyAppeal.where(vbms_id: LegacyAppeal.convert_file_number_to_vacols(old_file_number))
+  las = LegacyAppeal.where(vbms_id: LegacyAppeal.convert_file_number_to_vacols(@old_file_number))
 
   las_count = las.count
   if las_count != 0
     existing_relations += as_count.to_s + " LegacyAppeal still exists.\n"
   end
 
-  ahls = AvailableHearingLocations.where(veteran_file_number: old_file_number)
+  ahls = AvailableHearingLocations.where(veteran_file_number: @old_file_number)
 
   ahls_count = ahls.count
   if ahls_count != 0
     existing_relations += ahls_count.to_s + " AvaialbelHearings still exists.\n"
   end
 
-  bpoas = BgsPowerOfAttorney.where(file_number: old_file_number)
+  bpoas = BgsPowerOfAttorney.where(file_number: @old_file_number)
 
   bpoas_count = bpoas.count
 
@@ -372,7 +344,7 @@ class RunRemediation
     existing_relations += bpoas_count.to_s + " BgsPowerOfAttorneys still exists.\n"
   end
 
-  ds = Document.where(file_number: old_file_number)
+  ds = Document.where(file_number: @old_file_number)
 
   ds_count = ds.count
 
@@ -380,7 +352,7 @@ class RunRemediation
     existing_relations += ds_count.to_s + " Document still exists.\n"
   end
 
-  epes = EndProductEstablishment.where(veteran_file_number: old_file_number)
+  epes = EndProductEstablishment.where(veteran_file_number: @old_file_number)
 
   epes_count = epes.count
 
@@ -388,7 +360,7 @@ class RunRemediation
     existing_relations += epes_count.to_s + " EndProductEstablishment still exists.\n"
   end
 
-  f8s = Form8.where(file_number: LegacyAppeal.convert_file_number_to_vacols(old_file_number))
+  f8s = Form8.where(file_number: LegacyAppeal.convert_file_number_to_vacols(@old_file_number))
 
   f8s_count = f8s.count
 
@@ -396,7 +368,7 @@ class RunRemediation
     existing_relations += f8s_count.to_s + " Form8 still exists.\n"
   end
 
-  hlrs = HigherLevelReview.where(veteran_file_number: old_file_number)
+  hlrs = HigherLevelReview.where(veteran_file_number: @old_file_number)
 
   hlrs_count = hlrs.count
 
@@ -404,7 +376,7 @@ class RunRemediation
     existing_relations += hlrs_count.to_s + " HilerLevelReview still exists.\n"
   end
 
-  is_fn = Intake.where(veteran_file_number: old_file_number)
+  is_fn = Intake.where(veteran_file_number: @old_file_number)
 
   is_fn_count = is_fn.count
 
@@ -412,7 +384,7 @@ class RunRemediation
     existing_relations += is_fn_count.to_s + " Intake by file_number still exists.\n"
   end
 
-  is_vi = Intake.where(veteran_id: v.id)
+  is_vi = Intake.where(veteran_id: @v.id)
 
   is_vi_count = is_vi.count
 
@@ -420,7 +392,7 @@ class RunRemediation
     existing_relations += is_vi_count.to_s + " intake by vet id still exists.\n"
   end
 
-  res = RampElection.where(veteran_file_number: old_file_number)
+  res = RampElection.where(veteran_file_number: @old_file_number)
 
   res_count = res.count
 
@@ -428,7 +400,7 @@ class RunRemediation
     existing_relations += res_count.to_s + " RampElection still exists.\n"
   end
 
-  rrs = RampRefiling.where(veteran_file_number: old_file_number)
+  rrs = RampRefiling.where(veteran_file_number: @old_file_number)
 
   rrs_count = rrs.count
 
@@ -436,7 +408,7 @@ class RunRemediation
     existing_relations += rrs_count.to_s + " RampRefiling still exists.\n"
   end
 
-  scs = SupplementalClaim.where(veteran_file_number: old_file_number)
+  scs = SupplementalClaim.where(veteran_file_number: @old_file_number)
 
   scs_count = scs.count
 
@@ -450,9 +422,47 @@ class RunRemediation
   end
 
   # delete duplicate veteran
-  v.destroy!
+  @v.destroy!
 
-  if Veteran.find_by_file_number(old_file_number).present?
+  if Veteran.find_by_file_number(@old_file_number).present?
     puts("Veteran failed to be deleted.")
+  end
+
+  private
+
+  def verify_pair
+    case @dupe_vets
+    when @dupe_vets.nil? || @dupe_vets.count < 2
+      puts("No duplicate veteran found")
+      fail Interrupt
+    when @dupe_vets.count > 2
+      puts("More than two veterans found. Aborting")
+      fail Interrupt
+    end
+  end
+
+  def duplicate_vet_ssn(other_v)
+    validate_dup_vet(other_v)
+
+    @vet_ssn = case other_v
+               when @v.ssn.empty? && !other_v.ssn.empty?
+                 other_v.ssn
+               else
+                 @v.ssn
+               end
+  end
+
+  def validate_dup_vet(other_v)
+    case other_v
+    when other_v.file_number.empty? || other_v.file_number == @old_file_number
+      puts("Both veterans have the same file_number or No file_number on the correct veteran. Aborting...")
+      fail Interrupt
+    when @v.ssn.empty? && other_v.ssn.empty?
+      puts("Neither veteran has a ssn and a ssn is needed to check the BGS file number. Aborting")
+      fail Interrupt
+    when !other_v.ssn.empty? && @v.ssn != other_v.ssn
+      puts("Veterans do not have the same ssn and a correct ssn needs to be chosen. Aborting.")
+      fail Interrupt
+    end
   end
 end
